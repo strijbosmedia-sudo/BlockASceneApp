@@ -35,3 +35,20 @@
 .startup-splash.dismissed{opacity:0;pointer-events:none}
 @media(max-width:650px){.topbar{height:54px;padding:0 10px}.brand{font-size:16px}.toolrail{width:100%;height:61px;padding:4px 6px;gap:2px}.tool{min-width:56px;width:56px;min-height:51px;height:51px}.timeline{height:138px;padding:8px}.beat-chip{flex-basis:116px;min-height:72px}.drawer{top:0}.stage-hud{top:7px;left:6px}}
 @media(prefers-reduced-motion:reduce){.startup-splash{transition-duration:0ms}}
+
+/* Block4Film 0.3: compact playback transport, touch friendly controls */
+.timeline{height:162px;padding:10px 14px}
+.timeline-head{display:flex;gap:11px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.timeline-heading{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
+.timeline-heading small{margin:0;font-size:9px;color:#787982;letter-spacing:1.3px}
+.playback-controls{display:flex;align-items:center;gap:7px;flex:1;min-width:0;flex-wrap:wrap}
+.play-toggle{background:#ebedf0;color:#0b0b0d;border-radius:6px;font-weight:750;min-height:39px;min-width:90px;padding:0 14px;font-size:12px}
+.play-toggle:hover{background:white}
+.playback-setting{display:inline-flex;align-items:center;gap:5px;font-size:10px;color:#999aa3;white-space:nowrap}
+.playback-setting select{background:#1b1b20;color:#edeef2;border-color:#303036;min-height:38px;height:38px;border-radius:6px;font-size:11px;padding:5px 22px 5px 8px;max-width:144px}
+.playback-controls .playback-export{min-height:38px;padding:6px 9px}
+.timeline-controls{margin-left:auto}
+.beat-chip.playing{box-shadow:inset 0 0 0 1px #f1f2f5}
+@media(max-width:1150px){.timeline{height:195px}.timeline-heading{flex:1 0 auto}.timeline-controls{margin-left:0}.timeline-head{row-gap:6px}.playback-controls{order:3;flex-basis:100%}.playback-setting.playback-mode{flex:0 0 auto}}
+@media(max-width:650px){.timeline{height:215px;padding:8px}.timeline-head{gap:6px}.timeline-heading{flex:1 1 50%}.timeline-controls{margin-left:auto}.timeline-controls .action.icon-only{min-height:32px;height:32px;width:29px;font-size:19px}.timeline-controls .action.primary{font-size:10px;min-height:34px;padding:4px 8px}.playback-controls{gap:5px;order:3;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}.play-toggle{min-height:42px;min-width:78px;padding:0 8px}.playback-setting{gap:4px}.playback-setting span{display:none}.playback-setting select{min-height:41px;height:41px;padding-left:7px}.playback-controls .playback-export{min-height:41px}.beat-chip{min-height:68px}}
+@media(hover:none) and (pointer:coarse){.play-toggle,.playback-setting select,.playback-controls .playback-export{min-height:46px}}

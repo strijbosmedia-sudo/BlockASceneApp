@@ -1,6 +1,6 @@
 {
   "name": "blockascene",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "Block4Film offline scene blocking editor for desktop and tablet",
   "main": "desktop/main.cjs",
@@ -9,7 +9,7 @@
   "scripts": {
     "start": "electron .",
     "dist:win": "electron-builder --win portable --x64 --publish never",
-    "test:model": "node tests/model.test.cjs"
+    "test:model": "node tests/model.test.cjs && node tests/playback.test.cjs"
   },
   "devDependencies": {
     "electron": "^38.0.0",
