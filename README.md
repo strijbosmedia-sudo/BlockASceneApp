@@ -14,6 +14,15 @@
 - Touch-friendly UI with a minimal near-black theme, object roster, contextual property panel and scene beat strip.
 - Export active beat PNG, all beats PNG ZIP, basic WebM slideshow and an editable project file.
 
+### v0.3.0: Animated scene playback
+
+- Play/Pause in the beat timeline, also available with **Space**.
+- The scene holds for **2.5 seconds per beat** by default, with smooth 0.95-second transitions.
+- Playback speed options: **0.5×, 0.75×, 1×, 1.5×, 2×**. Beat hold choices: **2, 2.5, 3, 5 seconds**.
+- Transition styles: **Smooth move** (actors/cameras animate and camera track moves play during each hold), **Color fade**, and **Ghost fade**.
+- An **Export video** button creates an animated **WebM** with the same selected speed and transition settings. Requires a browser/Electron environment supporting `MediaRecorder` with WebM; MP4 is not yet supported.
+- Actors and cameras offer an independent **Black / White symbol outline** selector, stored by identity for all beats and scene instances.
+
 No AI, 3D, or simulated advanced lighting. Cross-device live sync is not yet implemented.
 
 ## Windows portable download
@@ -27,7 +36,7 @@ Node.js 22 is recommended for Electron packaging:
 ```bash
 npm install
 npm run start       # Launch Electron
-npm run test:model  # Unit tests for schema and project colors
+npm run test:model  # Unit tests for schema, project colors and playback timing
 npm run dist:win    # Package portable Windows executable (on Windows)
 ```
 
