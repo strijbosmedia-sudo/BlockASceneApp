@@ -31,4 +31,15 @@ assert.equal(migrated.scenes[0].beats[0].positions.actor.rotation,-90);
 assert.ok(migrated.identities.cam?.color);
 assert.equal(old.scenes[0].beats[0].cameras,undefined,'migration must not mutate old');
 assert.equal(M.migrate(migrated).scenes[0].cameras.length,1,'migration is idempotent');
+// Per-beat object visibility, including early beats that did not yet contain the object.
+assert.equal(M.PRESET.length%7,0,'the actor/camera color palette fills all 7 columns');
+const lateCam=M.addIdentity(project,scene,'camera',beat,{x:400,y:410});
+assert.equal(scene.beats[0].cameras[lateCam.id],undefined);
+assert.equal(M.setBeatVisibility(scene,'camera',lateCam.id,scene.beats[0].id,true),true);
+assert.equal(scene.beats[0].cameras[lateCam.id].visible,true);
+assert.equal(scene.beats[0].cameras[lateCam.id].x,400);
+assert.equal(M.setBeatVisibility(scene,'camera',lateCam.id,scene.beats[0].id,false),true);
+assert.equal(scene.beats[0].cameras[lateCam.id].visible,false);
+assert.equal(beat.cameras[lateCam.id].visible,true,'other beats remain unchanged');
+assert.equal(M.setBeatVisibility(scene,'camera','bogus',scene.beats[0].id,true),false);
 console.log('Model tests passed');

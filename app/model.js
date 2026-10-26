@@ -2,7 +2,7 @@
 (function(root,factory){const api=factory();if(typeof module!=='undefined'&&module.exports)module.exports=api;root.B4Model=api;})(typeof globalThis!=='undefined'?globalThis:this,function(){
 'use strict';
 const VERSION=2;
-const PRESET=['#399BFF','#FFAB36','#AB70FF','#23DECE','#FF6464','#C1ED42','#FF4DC4','#6585FF','#FFE04C','#F27A3F','#55E997','#E35CF6','#40CBF6','#FF477B','#A4AFFF','#EBE454','#C887FF','#47DFAC','#F782B3','#A8D63F'];
+const PRESET=['#399BFF','#FFAB36','#AB70FF','#23DECE','#FF6464','#C1ED42','#FF4DC4','#6585FF','#FFE04C','#F27A3F','#55E997','#E35CF6','#40CBF6','#FF477B','#A4AFFF','#EBE454','#C887FF','#47DFAC','#F782B3','#A8D63F','#76D7FF'];
 const clone=v=>JSON.parse(JSON.stringify(v));
 const uid=()=>globalThis.crypto?.randomUUID?.()||'b4-'+Date.now().toString(36)+Math.random().toString(36).slice(2);
 const validColor=v=>typeof v==='string'&&/^#[0-9a-f]{6}$/i.test(v);
@@ -49,7 +49,29 @@ function createProject(name='Untitled Film'){
 function nextBeat(scene,current){const idx=scene.beats.findIndex(b=>b.id===current?.id),previous=current||scene.beats[scene.beats.length-1];const beat={id:uid(),name:`Beat ${String(scene.beats.length+1).padStart(2,'0')}`,positions:clone(previous?.positions||{}),cameras:clone(previous?.cameras||{}),equipment:clone(previous?.equipment||{})};scene.beats.splice(idx<0?scene.beats.length:idx+1,0,beat);return beat}
 function addIdentity(project,scene,type,beat,point,shape){const id=uid(),entry={id};applyIdentity(project,entry,type);if(type==='actor'){scene.actors.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.positions[id]=defaultActorState(point.x,point.y)}}else if(type==='camera'){scene.cameras.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.cameras[id]=defaultCameraState(point.x,point.y)}}else{entry.name=shape==='custom'?'Custom Object':shape[0].toUpperCase()+shape.slice(1);entry.type=shape;entry.color='#C4C7CD';scene.equipment.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.equipment[id]=defaultEquipmentState(point.x,point.y)}}return entry}
 function recolor(project,id,newColor){if(!validColor(newColor))return 'Invalid HEX color';const info=project.identities?.[id];if(info&&Object.entries(project.identities).some(([key,v])=>key!==id&&colorKey(v.color)===colorKey(newColor)))return 'Color already used. Pick another color.';if(info)info.color=newColor;for(const scene of project.scenes)for(const entity of [...scene.actors,...scene.cameras,...scene.equipment])if(entity.id===id)entity.color=newColor;return null}
+/** Set visibility on any beat, including beats before an object was introduced.
+ * A missing state is copied from the nearest beat that contains this identity.
+ * This never mutates a different beat or the identity itself. */
+function setBeatVisibility(scene,type,id,beatId,visible){
+ const key=type==='actor'?'positions':type==='camera'?'cameras':null;
+ if(!key)return false;
+ const index=scene.beats.findIndex(b=>b.id===beatId);
+ if(index<0)return false;
+ if(!(type==='actor'?scene.actors:scene.cameras).some(v=>v.id===id))return false;
+ const target=scene.beats[index];target[key]??={};
+ if(!target[key][id]){
+  if(!visible)return true;
+  let nearest=null,distance=Infinity;
+  for(let i=0;i<scene.beats.length;i++){
+   const state=scene.beats[i][key]?.[id];
+   if(state&&Math.abs(index-i)<distance){nearest=state;distance=Math.abs(index-i)}
+  }
+  target[key][id]=clone(nearest||(type==='actor'?defaultActorState():defaultCameraState()));
+ }
+ target[key][id].visible=!!visible;
+ return true;
+}
 function setOutline(project,id,outline){if(!['white','black'].includes(outline))return false;const item=project.identities?.[id];if(item)item.outline=outline;for(const s of project.scenes)for(const v of [...s.actors,...s.cameras])if(v.id===id)v.outline=outline;return true}
 function rename(project,id,newName){const info=project.identities?.[id];if(info)info.name=newName;for(const scene of project.scenes)for(const entity of [...scene.actors,...scene.cameras,...scene.equipment])if(entity.id===id)entity.name=newName}
-return {VERSION,PRESET,clone,uid,label,normalizeAngle,register,applyIdentity,uniqueColor,migrate,createProject,nextBeat,addIdentity,recolor,rename,setOutline,defaultActorState,defaultCameraState,defaultEquipmentState};
+return {VERSION,PRESET,clone,uid,label,normalizeAngle,register,applyIdentity,uniqueColor,migrate,createProject,nextBeat,addIdentity,recolor,rename,setOutline,setBeatVisibility,defaultActorState,defaultCameraState,defaultEquipmentState};
 });

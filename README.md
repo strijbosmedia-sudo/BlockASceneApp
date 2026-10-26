@@ -1,4 +1,4 @@
-# Block4Film v0.2.1
+# Block4Film v0.3.1
 
 **Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor for Windows, desktop browsers and touch tablets.
 
@@ -13,6 +13,16 @@
 - Faded previous/next ghost positions, dotted arrows for between-beat moves, solid arrows for push/slide/track camera moves within a beat.
 - Touch-friendly UI with a minimal near-black theme, object roster, contextual property panel and scene beat strip.
 - Export active beat PNG, all beats PNG ZIP, basic WebM slideshow and an editable project file.
+
+### v0.3.1: Beat visibility and export appearance
+
+- **Quick editor ghost toggle** in the top bar. The Layers panel still offers Off, Previous + Next, and All beats.
+- Actor and camera inspectors now show **one checkbox per beat**. Toggling an absent object into an earlier beat restores its nearest saved state; updates do not affect other beats. New beats appear in the list automatically.
+- **21-color** preset palette fills the 7-column grid. Object identities retain their project-wide colors.
+- **Layers** opens on the left, away from the right-hand object properties. On small screens it switches panels instead of stacking them.
+- A separate **Export settings** panel stores preferences with the project: adjacent beat ghosts in PNG/ZIP, adjacent ghosts in WebM, camera cones in both formats, and dotted paths in exports.
+- Camera cones are drawn during animated playback and in rendered WebM frames, not only on static PNGs.
+- Existing `.blockascene` project data remains schema v2, with no incompatible migration.
 
 ### v0.3.0: Animated scene playback
 

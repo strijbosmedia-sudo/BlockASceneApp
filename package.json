@@ -1,6 +1,6 @@
 {
   "name": "blockascene",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "description": "Block4Film offline scene blocking editor for desktop and tablet",
   "main": "desktop/main.cjs",
