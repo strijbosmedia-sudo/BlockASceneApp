@@ -19,6 +19,8 @@ jobs:
           node-version: '22'
       - name: Install packaging dependencies
         run: npm install --no-audit --no-fund
+      - name: Validate document model
+        run: npm run test:model
       - name: Build portable app
         run: npm run dist:win
       - name: Upload Windows EXE as artifact
