@@ -1,4 +1,4 @@
-# BlockaScene v0.2
+# Block4Film v0.2.1
 
 **Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor for Windows, desktop browsers and touch tablets.
 
@@ -47,3 +47,14 @@ Export a project backup from v0.1 before updating. v0.2 uses the same local Inde
 - **Property panel:** color, orientation, names, position, visibility, camera lens and start/end track movement.
 
 See `docs/V02-REDESIGN.md` for behavior details and `docs/PRODUCT_BLUEPRINT_v0.3.md` for the original vision.
+
+## v0.2.1 refinement (Block4Film branding)
+
+- Minimal black startup splash with white `Block4Film` wordmark. The editor and the application title also use this text-only branding.
+- Top-left menu is a single hamburger button when closed. The opened drawer is clearly titled Menu.
+- Mouse: wheel to zoom, hold **middle mouse button** and drag to pan (in any tool), or select the existing Pan tool and drag with the primary button.
+- Touch: use **two fingers** to pan and pinch zoom the floor plan. One finger continues to select, rotate, and move objects. In placing tools, an object is added on finger release, preventing accidental creation during a two-finger gesture.
+- Existing v0.2 project data and the old Windows Electron data folder are preserved. Back up projects before upgrading.
+- Less panel chrome and simpler, flatter workspace surfaces; Select and Pan remain available in the toolbar.
+
+The GitHub repository name intentionally remains `BlockASceneApp` for link compatibility. The app presented to users is now **Block4Film**.
