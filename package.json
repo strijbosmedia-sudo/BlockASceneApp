@@ -1,10 +1,10 @@
 {
   "name": "blockascene",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
-  "description": "Touch-first filmmaking blocking and floor-plan editor",
+  "description": "Block4Film offline scene blocking editor for desktop and tablet",
   "main": "desktop/main.cjs",
-  "author": "BlockaScene",
+  "author": "Block4Film",
   "license": "UNLICENSED",
   "scripts": {
     "start": "electron .",
@@ -17,7 +17,7 @@
   },
   "build": {
     "appId": "film.blockascene.app",
-    "productName": "BlockaScene",
+    "productName": "Block4Film",
     "asar": true,
     "files": [
       "app/**/*",
@@ -37,6 +37,7 @@
         }
       ],
       "artifactName": "BlockaScene-${version}-Portable.${ext}"
-    }
+    },
+    "artifactName": "Block4Film-${version}-Portable.${ext}"
   }
 }
