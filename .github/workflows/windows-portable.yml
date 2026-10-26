@@ -1,0 +1,30 @@
+name: Build Windows portable EXE
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'desktop/**'
+      - 'package.json'
+      - '.github/workflows/windows-portable.yml'
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install packaging dependencies
+        run: npm install --no-audit --no-fund
+      - name: Build portable app
+        run: npm run dist:win
+      - name: Upload Windows EXE as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: BlockaScene-Windows-Portable
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,25 @@
+{
+  "name": "blockascene",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Touch-first filmmaking blocking and floor-plan editor",
+  "main": "desktop/main.cjs",
+  "author": "BlockaScene",
+  "license": "UNLICENSED",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win portable --x64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "film.blockascene.app",
+    "productName": "BlockaScene",
+    "asar": true,
+    "files": ["app/**/*", "desktop/**/*", "package.json"],
+    "directories": {"output": "dist"},
+    "win": {"target": [{"target": "portable", "arch": ["x64"]}], "artifactName": "BlockaScene-${version}-Portable.${ext}"}
+  }
+}
