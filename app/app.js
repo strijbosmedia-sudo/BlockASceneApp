@@ -187,7 +187,7 @@ function onUp(e){
 }
 function wheel(e){e.preventDefault();const p=canvasPoint(e),old=world(p);ui.view.scale=clamp(ui.view.scale*Math.exp(-e.deltaY*.001),.14,4);ui.view.x=p.x-old.x*ui.view.scale;ui.view.y=p.y-old.y*ui.view.scale;paint()}
 function chooseBeat(id){stopPlayback();playback.elapsedMs=0;ui.beatId=id;if(ui.selection&&!stateOf()&&!detailsOf(ui.selection))ui.selection=null;render()}
-function addBeat(){stopPlayback();checkpoint();const b=M.nextBeat(scene(),beat());ui.beatId=b.id;ui.selection=null;save();render()}
+function addBeat(){stopPlayback();checkpoint();const b=M.nextBeat(scene(),beat());ui.beatId=b.id;save();render()}
 function removeSelection(){const sel=ui.selection;if(!sel)return;checkpoint();const s=scene();if(sel.type==='actor'){s.actors=s.actors.filter(x=>x.id!==sel.id);for(const b of s.beats)delete b.positions[sel.id]}
  else if(sel.type==='camera'){s.cameras=s.cameras.filter(x=>x.id!==sel.id);for(const b of s.beats)delete b.cameras[sel.id]}
  else if(sel.type==='equipment'){s.equipment=s.equipment.filter(x=>x.id!==sel.id);for(const b of s.beats)delete b.equipment[sel.id]}
