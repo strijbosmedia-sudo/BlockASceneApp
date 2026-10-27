@@ -9,6 +9,7 @@ let database={version:2,projects:[]};
 let previewJobs=Promise.resolve();
 let ui={libraryFilter:'',librarySort:'recent',libraryView:'grid',previewDraft:undefined,page:'editor',manualTab:'start',projectId:null,sceneId:null,beatId:null,selection:null,tool:'select',showMenu:false,showInspector:false,showLayers:false,showExportPanel:false,context:null,dialog:null,manualScroll:{},manualReturn:'workspace',layout:{layersPinned:false,propertiesPinned:false,layersSide:'right',propertiesSide:'right',layersWidth:290,propertiesWidth:300,layersFloatX:null,layersFloatY:null,propertiesFloatX:null,propertiesFloatY:null,layersFloatHeight:490,propertiesFloatHeight:510,timelineCollapsed:false},previousGhostMode:'adjacent',showCones:true,showPaths:true,showCameraMoves:true,ghostMode:'adjacent',view:{scale:.8,x:0,y:0},autoFit:true};
 let canvas,wrap,ctx,drag=null,pointers=new Map(),pinch=null,saveTimer,undo=[],redo=[],images=new Map();
+let touchMoveTimer=null;const TOUCH_HOLD_MS=235,DRAG_SLOP_PX=7;
 let playback={playing:false,elapsedMs:0,startedAt:0,startIndex:0,raf:0,frame:null,exporting:false};
 const playbackOptions=()=>P.settings(project()?.playback);
 function stopPlayback(resetFrame=true){if(playback.raf)cancelAnimationFrame(playback.raf);playback.raf=0;playback.playing=false;if(resetFrame)playback.frame=null;updatePlaybackChrome()}
@@ -250,9 +251,18 @@ function inspector(){
   if(['actor','camera'].includes(sel.type))content+=identityNumberField(sel,d);
   if(state)content+=`<div class="two-fields">${prop('X','x',Math.round(state.x),'number')}${prop('Y','y',Math.round(state.y),'number')}</div>${prop('Direction (degrees)','rotation',Math.round(M.normalizeAngle(state.rotation)),'number','step="1"')}${sel.type==='equipment'?check('visible','Visible in this beat',state.visible!==false):''}`;
   if(sel.type==='actor'||sel.type==='camera')content+=beatVisibilityGrid(sel);
-  if(sel.type==='actor'&&state){content+=`${option('Movement within beat','motionKind',[['static','No movement'],['walk','Move actor']],state.motion?.kind||'static')}${state.motion?`<p class="help">Drag the destination marker to set the move.</p><div class="two-fields">${prop('End X','endX',Math.round(state.motion.endX),'number')}${prop('End Y','endY',Math.round(state.motion.endY),'number')}</div>${prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number')}`:''}`;}
-   if(sel.type==='camera'&&state){content+=`<div class="divider"></div><div class="two-fields">${prop('Lens (mm)','lens',state.lens,'number','min="8" max="600"')}${prop('Sensor (mm)','sensor',state.sensor,'number','min="5" max="70"')}</div>${option('Movement within beat','motionKind',[['static','Static'],['push','Push in / Pull back'],['slide','Slide left / right'],['track','Dolly / Track']],state.motion?.kind||'static')}`;
-   if(state.motion)content+=`<p class="help">Solid line from Pos 1 to Pos 2. Drag the end marker to define the camera move.</p><div class="two-fields">${prop('Pos 2 X','endX',Math.round(state.motion.endX),'number')}${prop('Pos 2 Y','endY',Math.round(state.motion.endY),'number')}</div>${prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number')}`;
+  if(sel.type==='actor'&&state){content+=`${option('Movement within beat','motionKind',[['static','No movement'],['walk','Move actor'],['turn','Turn in place']],state.motion?.kind||'static')}${state.motion?`<p class="help">Drag the destination and rotate its direction handle to turn while moving.</p>${state.motion.kind==='turn'?'':`<div class="two-fields">${prop('End X','endX',Math.round(state.motion.endX),'number')}${prop('End Y','endY',Math.round(state.motion.endY),'number')}</div>`}${prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number')}`:''}`;}
+   if(sel.type==='camera'&&state){content+=`<div class="divider"></div><div class="two-fields">${prop('Lens (mm)','lens',state.lens,'number','min="8" max="600"')}${prop('Sensor (mm)','sensor',state.sensor,'number','min="5" max="70"')}</div>${option('Movement within beat','motionKind',[['static','Static'],['pan','Pan in place'],['push','Push in / Pull back'],['slide','Slide left / right'],['track','Dolly / Track']],state.motion?.kind||'static')}`;
+   if(state.motion)content+=`<p class="help">Drag the destination and direction handle to rotate while moving.</p>${state.motion.kind==='pan'?'':`<div class="two-fields">${prop('Pos 2 X','endX',Math.round(state.motion.endX),'number')}${prop('Pos 2 Y','endY',Math.round(state.motion.endY),'number')}</div>`}${prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number')}`;
+  }
+  if(state?.motion&&['actor','camera'].includes(sel.type)){
+   const motion=state.motion,keys=[...(motion.keys||[])].sort((a,b)=>a.t-b.t);
+   content+=`<div class="divider"></div>${option('Motion path','motionPath',[['linear','Straight segments'],['smooth','Smooth curves']],motion.pathType||'linear')}
+    <div class="keyframe-head"><strong>Movement keyframes</strong>${btn('add-motion-keyframe','+','Add keyframe','small')}</div>
+    <p class="help">Drag keyframe diamonds to bend the path. Adjust timing and direction for turns and pans.</p>
+    ${keys.map((k,i)=>`<div class="keyframe-row"><div class="keyframe-head"><b>Keyframe ${i+1}</b><button data-action="remove-motion-keyframe" data-id="${esc(k.id)}" aria-label="Remove keyframe ${i+1}">×</button></div>
+      <div class="two-fields">${prop('Time (%)','keyframe:'+k.id+':t',Math.round(k.t*100),'number','min="1" max="99" step="1"')}${prop('Direction (°)','keyframe:'+k.id+':rotation',Math.round(M.normalizeAngle(k.rotation)),'number','step="1"')}</div>
+      <div class="two-fields">${prop('X','keyframe:'+k.id+':x',Math.round(k.x),'number')}${prop('Y','keyframe:'+k.id+':y',Math.round(k.y),'number')}</div></div>`).join('')}</div>`;
   }
   if(!state&&(sel.type==='actor'||sel.type==='camera'))content+=`<p class="help">This object has no saved position in this beat. Tick its beat checkbox to place it using its nearest saved state.</p>`;
   if(sel.type==='equipment'){content+=`${check('lockToSet','Lock position across beats',!!d.lockToSet)}<p class="help">Simple diagram symbol. Rename it to the real item on set.</p>`}
@@ -347,19 +357,48 @@ function render(){
  lastRenderedDialogKey=key;
 }
 function cached(src){if(!src)return null;let record=images.get(src);if(!record){record={ready:false,img:new Image()};images.set(src,record);record.img.onload=()=>{record.ready=true;paint()};record.img.onerror=()=>console.warn('Image could not be loaded');record.img.src=src}return record.ready?record.img:null}
-function initCanvas(){canvas=document.getElementById('stage');wrap=document.getElementById('canvasWrap');ctx=canvas.getContext('2d');pointers.clear();drag=null;pinch=null;if(ui.autoFit){fitView();ui.autoFit=false}canvas.addEventListener('pointerdown',onDown);canvas.addEventListener('pointermove',onMove);canvas.addEventListener('pointerup',onUp);canvas.addEventListener('pointercancel',onUp);canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()});paint()}
+function initCanvas(){canvas=document.getElementById('stage');wrap=document.getElementById('canvasWrap');ctx=canvas.getContext('2d');clearTimeout(touchMoveTimer);touchMoveTimer=null;pointers.clear();drag=null;pinch=null;if(ui.autoFit){fitView();ui.autoFit=false}canvas.addEventListener('pointerdown',onDown);canvas.addEventListener('pointermove',onMove);canvas.addEventListener('pointerup',onUp);canvas.addEventListener('pointercancel',onUp);canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()});paint()}
 function fitView(){if(!wrap)return;const r=wrap.getBoundingClientRect(),scale=Math.max(.15,Math.min((r.width-65)/W,(r.height-35)/H,1.8));ui.view={scale,x:(r.width-W*scale)/2,y:(r.height-H*scale)/2}}
 function canvasPoint(e){const r=canvas.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
 function world(p){return{x:(p.x-ui.view.x)/ui.view.scale,y:(p.y-ui.view.y)/ui.view.scale}}
 function selectionCenter(sel,b){const o=stateOf(sel,b);return o?{x:o.x,y:o.y}:null}
 function ringRadius(sel,scale){return Math.max(sel.type==='setobj'?55:sel.type==='camera'?45:38,34/scale)}
+
+function directionHandle(point,angle,distance=55){
+ const r=Math.max(distance,42/ui.view.scale),theta=rad(angle??-90);
+ return{x:point.x+r*Math.cos(theta),y:point.y+r*Math.sin(theta),r};
+}
+function paintDirectionHandle(g,point,angle,color,marker='END'){
+ const target=directionHandle(point,angle,marker==='END'?68:53);
+ g.save();g.strokeStyle=color;g.fillStyle=color;g.globalAlpha=.9;g.lineWidth=2/ui.view.scale;
+ g.setLineDash([5/ui.view.scale,5/ui.view.scale]);g.beginPath();g.arc(point.x,point.y,target.r,0,Math.PI*2);g.stroke();g.setLineDash([]);
+ g.beginPath();g.moveTo(point.x,point.y);g.lineTo(target.x,target.y);g.stroke();
+ g.beginPath();g.arc(target.x,target.y,8/ui.view.scale,0,2*Math.PI);g.fill();g.strokeStyle='#15161A';g.lineWidth=2/ui.view.scale;g.stroke();g.restore();
+}
+function drawMotionRoute(g,s,color,opacity=1){
+ if(!s?.motion)return;
+ const start=P.animateCameraPosition(s,0),samples=32;
+ g.save();g.strokeStyle=color;g.fillStyle=color;g.lineWidth=3;g.lineJoin='round';g.lineCap='round';g.globalAlpha=opacity;
+ g.beginPath();g.moveTo(start.x,start.y);
+ let distance=0,prev=start;
+ for(let i=1;i<=samples;i++){
+  const at=P.animateCameraPosition(s,i/samples);
+  distance+=Math.hypot(at.x-prev.x,at.y-prev.y);g.lineTo(at.x,at.y);prev=at;
+ }
+ if(distance>=9){g.stroke();const p=P.animateCameraPosition(s,.67),q=P.animateCameraPosition(s,.7);
+  g.translate(p.x,p.y);g.rotate(Math.atan2(q.y-p.y,q.x-p.x));
+  g.beginPath();g.moveTo(10,0);g.lineTo(-7,-5);g.lineTo(-7,5);g.closePath();g.fill();
+ }
+ g.restore();
+}
+
 function fillText(g,text,x,y,size=14,color='#F6F6F8',bold=true){g.font=`${bold?'700':'500'} ${size}px Inter, ui-sans-serif, sans-serif`;g.fillStyle=color;g.textAlign='center';g.textBaseline='middle';g.fillText(text,x,y)}
 function arrow(g,a,b,color,dotted=false,opacity=1,lineWidth=3){const angle=Math.atan2(b.y-a.y,b.x-a.x),length=Math.hypot(b.x-a.x,b.y-a.y);if(length<7)return;g.save();g.globalAlpha=opacity;g.strokeStyle=color;g.fillStyle=color;g.lineWidth=lineWidth;g.lineCap='round';g.setLineDash(dotted?[2,10]:[]);g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.stroke();g.setLineDash([]);const tip={x:a.x+(b.x-a.x)*.67,y:a.y+(b.y-a.y)*.67};g.translate(tip.x,tip.y);g.rotate(angle);g.beginPath();g.moveTo(8,0);g.lineTo(-8,-5.5);g.lineTo(-8,5.5);g.closePath();g.fill();g.restore()}
 function drawActor(g,a,s,ghost=false,opacity=1){if(!s||s.visible===false)return;g.save();g.translate(s.x,s.y);const color=ghost?'#8A8E97':a.color;g.globalAlpha=(ghost?.38:1)*(s.alpha??1)*opacity;g.fillStyle=ghost?'#292B30':color;g.strokeStyle=ghost?'#B9BDC6':a.outline==='black'?'#09090B':'#E8EBEF';g.lineWidth=ghost?1.8:2.4;if(ghost)g.setLineDash([4,5]);g.beginPath();g.arc(0,0,20,0,Math.PI*2);g.fill();g.stroke();g.setLineDash([]);g.save();g.rotate(rad(s.rotation??-90));g.beginPath();g.moveTo(29,0);g.lineTo(14,-9);g.lineTo(14,9);g.closePath();g.fillStyle=color;g.fill();g.restore();fillText(g,M.label(a.number||1),0,1,18,ghost?'#C1C4CC':'#0A0B0E');if(!ghost)fillText(g,a.name,s.x-s.x,s.y-s.y-34,13,a.color,false);g.restore()}
-function drawActorMove(g,a,s){if(!s||s.visible===false||!s.motion)return;const m=s.motion;arrow(g,{x:s.x,y:s.y},{x:m.endX,y:m.endY},a.color,false,.85,3);g.save();g.strokeStyle=a.color;g.lineWidth=2;g.setLineDash([5,5]);g.beginPath();g.arc(m.endX,m.endY,18,0,Math.PI*2);g.stroke();g.restore();fillText(g,'2',m.endX,m.endY,12,a.color)}
+function drawActorMove(g,a,s){if(!s||s.visible===false||!s.motion)return;const m=s.motion;drawMotionRoute(g,s,a.color,.85);if(Math.hypot(m.endX-s.x,m.endY-s.y)<9)return;g.save();g.strokeStyle=a.color;g.lineWidth=2;g.setLineDash([5,5]);g.beginPath();g.arc(m.endX,m.endY,18,0,Math.PI*2);g.stroke();g.restore();fillText(g,'2',m.endX,m.endY,12,a.color)}
 function drawCamera(g,c,s,ghost=false,showMotion=true,showCone=true,opacity=1){if(!s||s.visible===false)return;const color=ghost?'#92959F':c.color;g.save();g.globalAlpha=(ghost?.35:1)*(s.alpha??1)*opacity;
  if(showCone){const half=Math.atan((s.sensor||36)/(2*(s.lens||35))),angle=rad(s.rotation||0),distance=365;g.fillStyle=ghost?'#848A9510':c.color+'17';g.strokeStyle=ghost?'#9AA0AA55':c.color+'66';g.lineWidth=1.7;g.beginPath();g.moveTo(s.x,s.y);g.lineTo(s.x+distance*Math.cos(angle-half),s.y+distance*Math.sin(angle-half));g.arc(s.x,s.y,distance,angle-half,angle+half);g.closePath();g.fill();g.stroke()}
- if(showMotion&&s.motion){const target={x:s.motion.endX,y:s.motion.endY};arrow(g,s,target,color,false,ghost?.45:.94,4);g.save();g.translate(target.x,target.y);g.rotate(rad(s.motion.endRotation??s.rotation));g.strokeStyle=color;g.lineWidth=2.5;g.setLineDash([5,5]);g.strokeRect(-17,-12,34,24);g.setLineDash([]);g.restore();fillText(g,'2',target.x,target.y,15,color);if(!ghost){fillText(g,'POS 1',s.x,s.y+40,10,color,false);fillText(g,'POS 2',target.x,target.y+30,10,color,false)}}
+ if(showMotion&&s.motion&&Math.hypot(s.motion.endX-s.x,s.motion.endY-s.y)>=9){const target={x:s.motion.endX,y:s.motion.endY};drawMotionRoute(g,s,color,ghost?.45:.94);g.save();g.translate(target.x,target.y);g.rotate(rad(s.motion.endRotation??s.rotation));g.strokeStyle=color;g.lineWidth=2.5;g.setLineDash([5,5]);g.strokeRect(-17,-12,34,24);g.setLineDash([]);g.restore();fillText(g,'2',target.x,target.y,15,color);if(!ghost){fillText(g,'POS 1',s.x,s.y+40,10,color,false);fillText(g,'POS 2',target.x,target.y+30,10,color,false)}}
  g.translate(s.x,s.y);g.save();g.rotate(rad(s.rotation||0));g.fillStyle=ghost?'#2C2E34':color;g.strokeStyle=ghost?'#B8BBC4':c.outline==='black'?'#09090B':'#F0F1F5';g.lineWidth=ghost?1.8:2.5;g.beginPath();g.roundRect(-21,-15,42,30,6);g.fill();g.stroke();g.beginPath();g.moveTo(20,-10);g.lineTo(33,0);g.lineTo(20,10);g.closePath();g.fill();g.restore();fillText(g,String(c.number||1),0,0,16,ghost?'#CFD0D5':'#101013');if(!ghost)fillText(g,c.name,0,-33,12,c.color,false);g.restore()}
 function drawEquipment(g,e,s,ghost=false,opacity=1){if(!s||s.visible===false)return;g.save();g.translate(s.x,s.y);g.rotate(rad(s.rotation||0));g.globalAlpha=(ghost?.25:1)*(s.alpha??1)*opacity;g.strokeStyle=ghost?'#979AA2':e.color||'#C4C7CF';g.fillStyle='#25262B';g.lineWidth=3;const kind=e.type;g.beginPath();if(['light','reflector','stand'].includes(kind)){g.arc(0,0,kind==='reflector'?22:17,0,Math.PI*2);g.fill();g.stroke();if(kind==='light'){g.beginPath();g.moveTo(0,0);g.lineTo(30,0);g.stroke()}else if(kind==='stand'){g.beginPath();g.moveTo(-9,-9);g.lineTo(9,9);g.moveTo(-9,9);g.lineTo(9,-9);g.stroke()}}
  else if(kind==='tube'||kind==='track'||kind==='boom'){g.moveTo(-34,0);g.lineTo(34,0);g.stroke();if(kind==='track'){g.moveTo(-34,-9);g.lineTo(34,-9);g.stroke()}}else if(kind==='flag'){g.rect(-22,-17,44,34);g.stroke();g.beginPath();g.moveTo(0,-17);g.lineTo(0,17);g.stroke()}else{g.roundRect(-26,-17,52,34,kind==='panel'?3:9);g.fill();g.stroke()}g.restore();if(!ghost)fillText(g,e.name,s.x,s.y-40,12,e.color||'#DBDEE4',false)}
@@ -390,13 +429,43 @@ function draw(g,width,height,opts={}){const s=scene(),location=set();if(!s||!loc
  for(const e of s.equipment)drawEquipment(g,e,e.lockToSet?e.fixedState:b.equipment[e.id]);
  for(const c of s.cameras)drawCamera(g,c,b.cameras[c.id],false,opts.moves??ui.showCameraMoves,opts.cones??ui.showCones);
  for(const a of s.actors){if(opts.moves??ui.showCameraMoves)drawActorMove(g,a,b.positions[a.id]);drawActor(g,a,b.positions[a.id])}
- if(!exportMode&&ui.selection){const origin=selectionCenter(ui.selection,b);if(origin){const r=ringRadius(ui.selection,view.scale),color=detailsOf(ui.selection)?.color||'#EDEEF1';g.strokeStyle=color;g.globalAlpha=.92;g.lineWidth=2/view.scale;g.setLineDash([7/view.scale,6/view.scale]);g.beginPath();g.arc(origin.x,origin.y,r,0,Math.PI*2);g.stroke();g.setLineDash([]);g.fillStyle=color;g.beginPath();g.arc(origin.x+r*Math.cos(rad(stateOf(ui.selection)?.rotation||0)),origin.y+r*Math.sin(rad(stateOf(ui.selection)?.rotation||0)),6/view.scale,0,Math.PI*2);g.fill();if(drag?.mode==='rotate'){fillText(g,`${Math.round(M.normalizeAngle(stateOf(ui.selection)?.rotation||0))}°`,origin.x,origin.y+r+24/view.scale,14/view.scale,color)} }}
+ if(!exportMode&&ui.selection){const origin=selectionCenter(ui.selection,b);if(origin){const r=ringRadius(ui.selection,view.scale),color=detailsOf(ui.selection)?.color||'#EDEEF1';
+
+   const selectedState=stateOf(ui.selection);
+   if(selectedState?.motion){
+    const m=selectedState.motion;
+    paintDirectionHandle(g,{x:m.endX,y:m.endY},m.endRotation??selectedState.rotation,color,'END');
+    for(const k of m.keys||[]){
+     const active=ui.motionKeyId===k.id,size=(active?13:10)/view.scale;
+     g.save();g.translate(k.x,k.y);g.rotate(Math.PI/4);
+     g.fillStyle=active?'#F5F5F8':color;g.strokeStyle='#101114';g.lineWidth=2/view.scale;
+     g.fillRect(-size/2,-size/2,size,size);g.strokeRect(-size/2,-size/2,size,size);g.restore();
+     if(active)paintDirectionHandle(g,{x:k.x,y:k.y},k.rotation??0,color,'KEY');
+    }
+   }
+g.strokeStyle=color;g.globalAlpha=.92;g.lineWidth=2/view.scale;g.setLineDash([7/view.scale,6/view.scale]);g.beginPath();g.arc(origin.x,origin.y,r,0,Math.PI*2);g.stroke();g.setLineDash([]);g.fillStyle=color;g.beginPath();g.arc(origin.x+r*Math.cos(rad(stateOf(ui.selection)?.rotation||0)),origin.y+r*Math.sin(rad(stateOf(ui.selection)?.rotation||0)),6/view.scale,0,Math.PI*2);g.fill();if(drag?.mode==='rotate'){fillText(g,`${Math.round(M.normalizeAngle(stateOf(ui.selection)?.rotation||0))}°`,origin.x,origin.y+r+24/view.scale,14/view.scale,color)} }}
  g.restore();if(exportMode){g.fillStyle='#E6E8EE';g.font='700 26px sans-serif';g.fillText(`${s.name}  /  ${b.name}`,28,39)}
 }
 function paint(){if(!canvas?.isConnected||!wrap)return;const width=Math.max(1,Math.floor(wrap.clientWidth)),height=Math.max(1,Math.floor(wrap.clientHeight)),ratio=Math.min(devicePixelRatio||1,2);if(canvas.width!==Math.round(width*ratio)||canvas.height!==Math.round(height*ratio)){canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio)}ctx.setTransform(ratio,0,0,ratio,0,0);draw(ctx,width,height,playback.frame?{frame:playback.frame,mode:playbackOptions().mode}:{});const t=document.getElementById('zoomText');if(t)t.textContent=`TOP VIEW · ${Math.round(ui.view.scale*100)}%`;canvas.dataset.viewX=String(ui.view.x);canvas.dataset.viewY=String(ui.view.y);canvas.dataset.viewScale=String(ui.view.scale)}
 function hitAt(w){const sc=scene(),b=beat();if(!sc||!b)return null;
  // Selected object ring and camera path end take priority over object bodies.
- if(ui.selection){const o=stateOf(),center=selectionCenter(ui.selection,b);if(center){const r=ringRadius(ui.selection,ui.view.scale),d=Math.hypot(w.x-center.x,w.y-center.y),tol=13/ui.view.scale;if(Math.abs(d-r)<=tol)return{type:'rotate',selection:ui.selection};if(['camera','actor'].includes(ui.selection.type)&&o?.motion){const e=o.motion;if(Math.hypot(w.x-e.endX,w.y-e.endY)<=Math.max(16,16/ui.view.scale))return{type:'endpoint',selection:ui.selection}}}}
+ if(ui.selection){const o=stateOf(),center=selectionCenter(ui.selection,b);if(center){
+   const tol=Math.max(16,16/ui.view.scale);
+   if(['camera','actor'].includes(ui.selection.type)&&o?.motion){
+    const e=o.motion,handle=directionHandle({x:e.endX,y:e.endY},e.endRotation??o.rotation,68);
+    if(Math.hypot(w.x-handle.x,w.y-handle.y)<tol)return{type:'end-rotate',selection:ui.selection};
+    for(const k of e.keys||[]){
+     if(ui.motionKeyId===k.id){
+      const h=directionHandle(k,k.rotation,53);
+      if(Math.hypot(w.x-h.x,w.y-h.y)<tol)return{type:'key-rotate',keyId:k.id,selection:ui.selection};
+     }
+    }
+    for(const k of e.keys||[])if(Math.hypot(w.x-k.x,w.y-k.y)<tol)return{type:'keyframe',keyId:k.id,selection:ui.selection};
+    if(!['turn','pan'].includes(e.kind)&&Math.hypot(w.x-e.endX,w.y-e.endY)<tol)return{type:'endpoint',selection:ui.selection};
+   }
+   const r=ringRadius(ui.selection,ui.view.scale),d=Math.hypot(w.x-center.x,w.y-center.y);
+   if(Math.abs(d-r)<=13/ui.view.scale)return{type:'rotate',selection:ui.selection};
+ }}
  for(let i=sc.actors.length-1;i>=0;i--){const a=sc.actors[i],v=b.positions[a.id];if(v?.visible!==false&&v&&Math.hypot(w.x-v.x,w.y-v.y)<=Math.max(24,19/ui.view.scale))return{type:'object',selection:{type:'actor',id:a.id}}}
  for(let i=sc.cameras.length-1;i>=0;i--){const c=sc.cameras[i],v=b.cameras[c.id];if(v?.visible!==false&&v&&Math.hypot(w.x-v.x,w.y-v.y)<=Math.max(30,22/ui.view.scale))return{type:'object',selection:{type:'camera',id:c.id}}}
  for(let i=sc.equipment.length-1;i>=0;i--){const e=sc.equipment[i],v=e.lockToSet?e.fixedState:b.equipment[e.id];if(v?.visible!==false&&v&&Math.hypot(w.x-v.x,w.y-v.y)<=Math.max(32,24/ui.view.scale))return{type:'object',selection:{type:'equipment',id:e.id}}}
@@ -404,30 +473,54 @@ function hitAt(w){const sc=scene(),b=beat();if(!sc||!b)return null;
  return null}
 function place(tool,pos){checkpoint();const p=project(),s=scene(),b=beat();let entry;if(['actor','camera'].includes(tool)){entry=M.addIdentity(p,s,tool,b,pos);ui.selection={type:tool,id:entry.id}}else if(tool.startsWith('equip:')){entry=M.addIdentity(p,s,'equipment',b,pos,tool.slice(6));ui.selection={type:'equipment',id:entry.id}}else{entry={id:M.uid(),name:tool==='furniture'?'Table':'',type:tool,x:pos.x,y:pos.y,w:tool==='wall'?160:tool==='door'?80:110,h:tool==='furniture'?80:0,rotation:0};set().objects.push(entry);ui.selection={type:'setobj',id:entry.id}}ui.showInspector=true;ui.tool='select';save();render()}
 function onDown(e){
- if(playback.playing||playback.frame){stopPlayback();playback.elapsedMs=0;}
+ if(playback.playing||playback.frame){stopPlayback();playback.elapsedMs=0}
  const middle=e.pointerType==='mouse'&&e.button===1;
  if(e.pointerType==='mouse'&&e.button!==0&&!middle)return;
  e.preventDefault();
  const p=canvasPoint(e),w=world(p);
- canvas.setPointerCapture(e.pointerId);
- pointers.set(e.pointerId,p);
- // Two touch contacts take precedence over selection, moving and placing objects.
+ canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,p);
  if(pointers.size>=2){
-  if(drag?.changed&&['move','rotate','endpoint'].includes(drag.mode))save();
+  clearTimeout(touchMoveTimer);touchMoveTimer=null;
+  if(drag?.changed&&drag.checkpointed)save();
   drag=null;
   if(pointers.size===2){const [a,b]=[...pointers.values()],mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};pinch={dist:Math.max(5,Math.hypot(a.x-b.x,a.y-b.y)),scale:ui.view.scale,anchor:world(mid)}}
   return;
  }
  if(middle){drag={mode:'pan',start:p,initial:{...ui.view},changed:false};canvas.classList.add('panning');return}
- const placing= !['select','pan','equipment'].includes(ui.tool) || ui.tool.startsWith('equip:');
+ const placing=!['select','pan','equipment'].includes(ui.tool)||ui.tool.startsWith('equip:');
  if(placing){
-  // Defer a finger tap until release, so adding a second finger never creates a stray object.
-  if(e.pointerType==='touch'){drag={mode:'pending-place',tool:ui.tool,start:p,changed:false};return}
-  pointers.delete(e.pointerId);if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);place(ui.tool,w);return;
+  if(e.pointerType==='touch'||e.pointerType==='pen'){drag={mode:'pending-place',tool:ui.tool,start:p,changed:false};return}
+  pointers.delete(e.pointerId);if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
+  place(ui.tool,w);return;
  }
  const hit=ui.tool==='pan'?null:hitAt(w);
- if(hit&&hit.selection){ui.selection=hit.selection;ui.showInspector=true;checkpoint();const o=stateOf(),angle=deg(Math.atan2(w.y-o.y,w.x-o.x));drag={mode:hit.type==='rotate'?'rotate':hit.type==='endpoint'?'endpoint':'move',start:p,initial:{...o},startAngle:angle,changed:false}}
- else{if(ui.tool!=='pan'){ui.selection=null;ui.showInspector=false}drag={mode:'pan',start:p,initial:{...ui.view},changed:false}}
+ if(hit?.selection){
+  const alreadySelected=ui.selection?.type===hit.selection.type&&ui.selection.id===hit.selection.id;
+  ui.selection=hit.selection;ui.showInspector=true;
+  const state=stateOf();
+  if(hit.keyId)ui.motionKeyId=hit.keyId;
+  else if(!alreadySelected)ui.motionKeyId=null;
+  const key=hit.keyId&&state?.motion?.keys?.find(k=>k.id===hit.keyId);
+  const rotationCenter=hit.type==='end-rotate'&&state?.motion?{x:state.motion.endX,y:state.motion.endY}:
+   hit.type==='key-rotate'&&key?key:{x:state.x,y:state.y};
+  const angle=deg(Math.atan2(w.y-rotationCenter.y,w.x-rotationCenter.x));
+  const mode=hit.type==='object'?'move':hit.type;
+  drag={mode,start:p,initial:{...state},startAngle:angle,keyId:hit.keyId,changed:false,checkpointed:false};
+  // A new selection is always tap-first. Only a brief hold promotes it to movement.
+  if(mode==='move'&&!alreadySelected){
+   drag.mode='pending-select';
+   const pointerId=e.pointerId,ref=drag;
+   clearTimeout(touchMoveTimer);
+   touchMoveTimer=setTimeout(()=>{
+    touchMoveTimer=null;
+    if(drag!==ref||ref.preHoldMoved||!pointers.has(pointerId))return;
+    ref.mode='move';ref.start={...pointers.get(pointerId)};ref.initial={...stateOf()};
+   },TOUCH_HOLD_MS);
+  }
+ }else{
+  if(ui.tool!=='pan'){ui.selection=null;ui.showInspector=false;ui.motionKeyId=null}
+  drag={mode:'pan',start:p,initial:{...ui.view},changed:false};
+ }
  if(drag.mode==='pan')canvas.classList.add('panning');
  paint();
 }
@@ -442,13 +535,41 @@ function onMove(e){
  }
  if(!drag)return;
  const dx=p.x-drag.start.x,dy=p.y-drag.start.y;
- if(Math.abs(dx)+Math.abs(dy)>4)drag.changed=true;
- if(drag.mode==='pending-place')return;
- if(drag.mode==='pan'){ui.view.x=drag.initial.x+dx;ui.view.y=drag.initial.y+dy}
- else{const state=stateOf();if(!state)return;
-  if(drag.mode==='move'){const mx=dx/ui.view.scale,my=dy/ui.view.scale;state.x=drag.initial.x+mx;state.y=drag.initial.y+my;if(state.motion){state.motion.endX=drag.initial.motion.endX+mx;state.motion.endY=drag.initial.motion.endY+my}}
-  else if(drag.mode==='rotate'){const w=world(p);let angle=drag.initial.rotation+deg(Math.atan2(w.y-state.y,w.x-state.x))-drag.startAngle;if(e.shiftKey)angle=Math.round(angle/15)*15;state.rotation=angle}
-  else if(drag.mode==='endpoint'&&state.motion){const w=world(p);state.motion.endX=w.x;state.motion.endY=w.y}
+ if(drag.mode==='pending-place'){if(Math.hypot(dx,dy)>DRAG_SLOP_PX)drag.changed=true;return}
+ if(drag.mode==='pending-select'){
+  if(Math.hypot(dx,dy)>DRAG_SLOP_PX){drag.preHoldMoved=true;clearTimeout(touchMoveTimer);touchMoveTimer=null}
+  return;
+ }
+ if(drag.mode==='pan'){
+  if(Math.hypot(dx,dy)>2){ui.view.x=drag.initial.x+dx;ui.view.y=drag.initial.y+dy;drag.changed=true;paint()}
+  return;
+ }
+ if(Math.hypot(dx,dy)<DRAG_SLOP_PX&&!drag.changed)return;
+ const state=stateOf();if(!state)return;
+ if(!drag.checkpointed){checkpoint();drag.checkpointed=true}
+ drag.changed=true;
+ if(drag.mode==='move'){
+  state.x=drag.initial.x+dx/ui.view.scale;
+  state.y=drag.initial.y+dy/ui.view.scale;
+  // An end point is anchored: dragging the start cannot drag a defined destination.
+  // Pan/turn in place is the one exception where both coordinates must coincide.
+  if(state.motion&&['turn','pan'].includes(state.motion.kind)){state.motion.endX=state.x;state.motion.endY=state.y}
+ }else if(drag.mode==='rotate'){
+  const w=world(p);
+  let angle=drag.initial.rotation+deg(Math.atan2(w.y-state.y,w.x-state.x))-drag.startAngle;
+  if(e.shiftKey)angle=Math.round(angle/15)*15;
+  state.rotation=angle;
+ }else if(drag.mode==='endpoint'&&state.motion){
+  const w=world(p);state.motion.endX=w.x;state.motion.endY=w.y;
+ }else if(drag.mode==='end-rotate'&&state.motion){
+  const w=world(p);let angle=deg(Math.atan2(w.y-state.motion.endY,w.x-state.motion.endX));
+  if(e.shiftKey)angle=Math.round(angle/15)*15;
+  state.motion.endRotation=angle;
+ }else if(['keyframe','key-rotate'].includes(drag.mode)&&state.motion){
+  const key=state.motion.keys?.find(k=>k.id===drag.keyId);if(!key)return;
+  const w=world(p);
+  if(drag.mode==='keyframe'&&!['pan','turn'].includes(state.motion.kind)){key.x=w.x;key.y=w.y}
+  else{let angle=deg(Math.atan2(w.y-key.y,w.x-key.x));if(e.shiftKey)angle=Math.round(angle/15)*15;key.rotation=angle}
  }
  paint();
 }
@@ -456,15 +577,18 @@ function onUp(e){
  if(!pointers.has(e.pointerId))return;
  const wasMulti=pinch!==null;
  pointers.delete(e.pointerId);
+ clearTimeout(touchMoveTimer);touchMoveTimer=null;
  if(canvas?.isConnected&&canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
  if(pointers.size<2)pinch=null;
- // Never replace the canvas until the last finger has lifted.
  if(pointers.size>0)return;
  canvas?.classList.remove('panning');
- if(drag?.mode==='pending-place'&&!drag.changed&&e.type!=='pointercancel'&&!wasMulti){const tool=drag.tool,p=world(drag.start);drag=null;place(tool,p);return}
- if(drag?.changed&&['move','rotate','endpoint'].includes(drag.mode))save();
+ if(drag?.mode==='pending-place'&&!drag.changed&&e.type!=='pointercancel'&&!wasMulti){
+  const tool=drag.tool,p=world(drag.start);drag=null;place(tool,p);return;
+ }
+ if(drag?.changed&&drag.checkpointed)save();
  drag=null;render();
 }
+
 function wheel(e){e.preventDefault();const p=canvasPoint(e),old=world(p);ui.view.scale=clamp(ui.view.scale*Math.exp(-e.deltaY*.001),.14,4);ui.view.x=p.x-old.x*ui.view.scale;ui.view.y=p.y-old.y*ui.view.scale;paint()}
 function chooseBeat(id){stopPlayback();playback.elapsedMs=0;ui.beatId=id;if(ui.selection&&!stateOf()&&!detailsOf(ui.selection))ui.selection=null;render()}
 function addBeat(){stopPlayback();checkpoint();const b=M.nextBeat(scene(),beat());ui.beatId=b.id;save();render()}
@@ -494,9 +618,27 @@ function edit(name,value){const sel=ui.selection,d=detailsOf(sel),o=stateOf(sel)
  else if(name==='itemColor'&&d){const error=sel.type==='equipment'?(d.color=value,null):M.recolor(p,d.id,value);if(error){notice(error);undo.pop();render();return}}
  else if(name==='setName')loc.name=value;else if(name==='opacity')loc.opacity=Number(value)/100;else if(name==='darken')loc.darken=value;
  else if(name==='lockToSet'&&d){if(value){d.fixedState=M.clone(o||M.defaultEquipmentState());d.lockToSet=true}else{for(const b of scene().beats)b.equipment[d.id]=M.clone(d.fixedState);d.lockToSet=false}}
- else if(name==='motionKind'&&['camera','actor'].includes(sel?.type)&&o){if(value==='static')o.motion=null;else{const angle=rad(o.rotation||0),dist=145;o.motion={kind:value,endX:o.motion?.endX??o.x+dist*Math.cos(angle),endY:o.motion?.endY??o.y+dist*Math.sin(angle),endRotation:o.motion?.endRotation??o.rotation}}}
- else if(['endX','endY','endRotation'].includes(name)&&o?.motion)o.motion[name]=Number(value);
- else if(o&&['x','y','rotation','lens','sensor'].includes(name)){const before={...o};o[name]=Number(value);if(name==='x'&&o.motion)o.motion.endX+=o.x-before.x;if(name==='y'&&o.motion)o.motion.endY+=o.y-before.y}
+ else if(name==='motionKind'&&['camera','actor'].includes(sel?.type)&&o){
+  if(value==='static')o.motion=null;
+  else{
+   const turnOnly=['pan','turn'].includes(value),old=o.motion,angle=rad(o.rotation||0),dist=145;
+   o.motion={kind:value,pathType:old?.pathType||'linear',keys:turnOnly?[]:M.clone(old?.keys||[]),
+    endX:turnOnly?o.x:old?.endX??o.x+dist*Math.cos(angle),
+    endY:turnOnly?o.y:old?.endY??o.y+dist*Math.sin(angle),
+    endRotation:old?.endRotation??o.rotation};
+  }
+ }
+ else if(name==='motionPath'&&o?.motion)o.motion.pathType=value==='smooth'?'smooth':'linear';
+ else if(name.startsWith('keyframe:')&&o?.motion){
+  const [,id,field]=name.split(':'),key=o.motion.keys?.find(k=>k.id===id);
+  if(key&&['t','x','y','rotation'].includes(field)){
+   let n=Number(value);if(!Number.isFinite(n)){undo.pop();return}
+   if(field==='t')n=clamp(n/100,.01,.99);
+   key[field]=n;o.motion.keys.sort((a,b)=>a.t-b.t);
+  }
+ }
+ else if(['endX','endY','endRotation'].includes(name)&&o?.motion){o.motion[name]=Number(value);if(['pan','turn'].includes(o.motion.kind)){o.motion.endX=o.x;o.motion.endY=o.y}}
+ else if(o&&['x','y','rotation','lens','sensor'].includes(name)){o[name]=Number(value);if(o.motion&&['pan','turn'].includes(o.motion.kind)){o.motion.endX=o.x;o.motion.endY=o.y}}
  else if(name==='visible'&&o)o.visible=value;
  save();setTimeout(render,0)}
 
@@ -563,6 +705,18 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
  else if(a==='choose-set'){checkpoint();scene().setId=id;ui.showMenu=false;ui.selection=null;save();render()}
  else if(a==='new-scene')openEditDialog('new-scene');else if(a==='new-set')openEditDialog('new-set');else if(a==='choose-beat')chooseBeat(id);else if(a==='add-beat')addBeat();
  else if(a==='previous-beat'||a==='next-beat'){const list=scene().beats,idx=list.findIndex(b=>b.id===ui.beatId),step=a==='next-beat'?1:-1;chooseBeat(list[clamp(idx+step,0,list.length-1)].id)}
+ else if(a==='add-motion-keyframe'){
+  const s=stateOf();if(s?.motion){
+   checkpoint();const keys=s.motion.keys||[],times=[0,...keys.map(k=>k.t).sort((a,b)=>a-b),1];let best=0,t=.5;
+   for(let i=1;i<times.length;i++)if(times[i]-times[i-1]>best){best=times[i]-times[i-1];t=(times[i]+times[i-1])/2}
+   const point=P.animateCameraPosition(s,t);
+   s.motion.keys=[...keys,{id:M.uid(),t,x:point.x,y:point.y,rotation:point.rotation}].sort((a,b)=>a.t-b.t);
+   s.motion.pathType='smooth';save();render();
+  }else notice('Choose a movement before adding keyframes.');
+ }
+ else if(a==='remove-motion-keyframe'){
+  const s=stateOf();if(s?.motion?.keys){checkpoint();s.motion.keys=s.motion.keys.filter(k=>k.id!==id);save();render()}
+ }
  else if(a==='select-object'){ui.selection={type:target.dataset.kind,id};ui.showLayers=false;ui.showExportPanel=false;ui.showInspector=true;render()}
  else if(a==='rename-beat'){ui.dialog={kind:'edit-beat',id:ui.beatId};render()}
  else if(a==='delete-beat'){if(scene().beats.length===1)return notice('A scene needs at least one beat');ui.dialog={kind:'confirm-delete',targetKind:'beat',id:ui.beatId,name:beat()?.name||'Beat'};render()}

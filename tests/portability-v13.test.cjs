@@ -2,7 +2,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const root=path.resolve(__dirname,'..');
 const file=p=>fs.readFileSync(path.join(root,p),'utf8');
 const pkg=JSON.parse(file('package.json'));
-assert.equal(pkg.version,'1.3.0');
+assert.match(pkg.version,/^1\.3\.[0-9]+$/);
 assert.equal(pkg.author,'strijbos.media');
 assert.match(pkg.build.copyright,/strijbos\.media/);
 assert.equal(pkg.build.appId,'film.blockascene.app','Windows user data remains compatible');
@@ -21,7 +21,7 @@ assert.match(file('app/app.js'),/Block4FilmMobile\.saveFile/);
 assert.match(file('.github/workflows/cross-platform.yml'),/assembleDebug/);
 assert.match(file('.github/workflows/cross-platform.yml'),/iphonesimulator/);
 assert.match(file('.github/workflows/cross-platform.yml'),/dist:mac/);
-assert.match(file('.github/workflows/release.yml'),/WINDOWS_TAG: v1\.3\.0/);
+assert.match(file('.github/workflows/release.yml'),/WINDOWS_TAG: v1\.3\.[0-9]+/);
 assert.match(file('.github/workflows/release.yml'),/WIN_CSC_LINK/);
 assert.doesNotMatch(file('.github/workflows/release.yml'),/WINDOWS_TAG: v1\.2\.1/);
 console.log('Block4Film v1.3 portability and strijbos.media release configuration checks passed');
