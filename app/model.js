@@ -39,7 +39,7 @@ function defaultCameraState(x=550,y=550){return{x,y,rotation:-90,lens:35,sensor:
 function defaultActorState(x=400,y=380){return{x,y,rotation:-90,visible:true}}
 function defaultEquipmentState(x=500,y=400){return{x,y,rotation:0,visible:true}}
 function migrate(project){if(!project||!Array.isArray(project.sets)||!Array.isArray(project.scenes)||!project.id||!project.name)throw Error('Not a BlockaScene project');
- const p=clone(project);p.identities??={};for(const set of p.sets){set.objects??=[];set.opacity??=.8;set.backgroundScale=Number.isFinite(Number(set.backgroundScale))?Math.max(.25,Math.min(3,Number(set.backgroundScale))):1;}
+ const p=clone(project);p.identities??={};for(const set of p.sets){set.objects??=[];set.opacity??=.8;set.backgroundScale=Number.isFinite(Number(set.backgroundScale))&&Number(set.backgroundScale)>0?Math.max(.25,Math.min(3,Number(set.backgroundScale))):1;for(const o of set.objects){if(['wall','window','door'].includes(o.type)&&Number(o.h)){const w=Number(o.w)||60,h=Number(o.h);o.w=Math.hypot(w,h);o.rotation=normalizeAngle((Number(o.rotation)||0)+Math.atan2(h,w)*180/Math.PI);o.h=0;}}}
  // Existing colors and IDs survive the upgrade. Camera v1 setups become per-beat camera states.
  for(const s of p.scenes){if(!p.sets.some(st=>st.id===s.setId))throw Error('Scene references a missing floor plan');s.actors??=[];s.cameras??=[];s.equipment??=[];s.beats??=[];
   for(const actor of s.actors)applyIdentity(p,actor,'actor');

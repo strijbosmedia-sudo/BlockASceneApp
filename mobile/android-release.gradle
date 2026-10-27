@@ -1,0 +1,31 @@
+// Credentials are read only from the environment, never generated or stored in source.
+def releaseValues = [
+    path: System.getenv('ANDROID_KEYSTORE_PATH'),
+    storePassword: System.getenv('ANDROID_KEYSTORE_PASSWORD'),
+    alias: System.getenv('ANDROID_KEY_ALIAS'),
+    keyPassword: System.getenv('ANDROID_KEY_PASSWORD')
+]
+def signingReady = releaseValues.values().every { it != null && !it.isEmpty() }
+def requestedRelease = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+if (requestedRelease && !signingReady) {
+    throw new GradleException('Release signing requires ANDROID_KEYSTORE_PATH, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD. No debug-key fallback is allowed.')
+}
+android {
+    signingConfigs {
+        block4filmRelease {
+            if (signingReady) {
+                storeFile file(releaseValues.path)
+                storePassword releaseValues.storePassword
+                keyAlias releaseValues.alias
+                keyPassword releaseValues.keyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (signingReady) {
+                signingConfig signingConfigs.block4filmRelease
+            }
+        }
+    }
+}

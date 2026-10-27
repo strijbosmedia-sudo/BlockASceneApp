@@ -107,7 +107,7 @@ const previews=fs.readFileSync(path.join(root,'app','previews.js'),'utf8');
 assert.match(appcode,/M\.backgroundFit\(bg\.naturalWidth/);
 assert.match(previews,/location\?\.backgroundScale/);
 const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
-assert.equal(pkg.version,'1.4.0');
+assert.match(pkg.version,/^1\.4\.[0-9]+$/);
 assert.match(pkg.scripts['mobile:android'],/scripts\/brand-android\.cjs/);
 assert.match(fs.readFileSync(path.join(root,'scripts/brand-android.cjs'),'utf8'),/viewBox="47 50 282 287"/);
 console.log('Block4Film v1.4.0 floor aspect, scale, structure resizing, light modes, cone dragging, Android icon pipeline passed');

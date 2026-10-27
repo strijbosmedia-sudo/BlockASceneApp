@@ -14,3 +14,10 @@ android/
 ios/
 app/assets/Block4Film.icns
 app/assets/Block4Film.iconset/
+
+# Signing material and generated browser test output
+*.jks
+*.keystore
+*.p12
+*.pfx
+browser-results/

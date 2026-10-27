@@ -3,13 +3,30 @@ on:
   workflow_dispatch:
   pull_request:
     branches: [main]
-    paths: ['app/**','mobile/**','scripts/**','package.json','capacitor.config.json','.github/workflows/cross-platform.yml']
+    paths: ['app/**','mobile/**','scripts/**','tests/**','package.json','capacitor.config.json','.github/workflows/cross-platform.yml']
   push:
     branches: [main]
-    paths: ['app/**','mobile/**','scripts/**','package.json','capacitor.config.json','.github/workflows/cross-platform.yml']
+    paths: ['app/**','mobile/**','scripts/**','tests/**','package.json','capacitor.config.json','.github/workflows/cross-platform.yml']
 permissions:
   contents: read
 jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:browser
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: Block4Film-Browser-Checks
+          path: browser-results/
+          if-no-files-found: warn
   macos:
     runs-on: macos-latest
     timeout-minutes: 60
@@ -28,7 +45,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
         with:
-          name: Block4Film-1.4.0-macOS-UNSIGNED-TEST
+          name: Block4Film-1.4.1-macOS-UNSIGNED-TEST
           path: |
             dist/*.dmg
             dist/*.zip
@@ -53,16 +70,17 @@ jobs:
         run: |
           npm run test:model
           npm run mobile:android
+          node tests/android-assets-v140.cjs
       - name: Build Android tablet test APK
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
       - name: Give the tablet APK a recognizable filename
         run: |
           mkdir -p android-out
-          cp android/app/build/outputs/apk/debug/app-debug.apk android-out/Block4Film-1.4.0-Android-Tablet-Test.apk
+          cp android/app/build/outputs/apk/debug/app-debug.apk android-out/Block4Film-1.4.1-Android-Tablet-Test.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Block4Film-1.4.0-Android-Tablet-APK
+          name: Block4Film-1.4.1-Android-Tablet-APK
           path: android-out/*.apk
           if-no-files-found: error
           retention-days: 14
@@ -87,10 +105,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build
           APP_DIR="$RUNNER_TEMP/Block4Film-iOS/Build/Products/Debug-iphonesimulator/App.app"
           test -d "$APP_DIR"
-          ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$RUNNER_TEMP/Block4Film-1.4.0-iOS-Simulator.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$RUNNER_TEMP/Block4Film-1.4.1-iOS-Simulator.zip"
       - uses: actions/upload-artifact@v4
         with:
-          name: Block4Film-1.4.0-iOS-SIMULATOR-ONLY
-          path: ${{ runner.temp }}/Block4Film-1.4.0-iOS-Simulator.zip
+          name: Block4Film-1.4.1-iOS-SIMULATOR-ONLY
+          path: ${{ runner.temp }}/Block4Film-1.4.1-iOS-Simulator.zip
           if-no-files-found: error
           retention-days: 14

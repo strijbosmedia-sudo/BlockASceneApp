@@ -1,6 +1,12 @@
-# Block4Film 1.3.0 · strijbos.media
+# Block4Film 1.4.1 candidate · strijbos.media
 
-**Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor currently developed and distributed for Windows.
+**Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor with a stable Windows baseline and Android tablet test builds.
+
+## Current status
+
+Windows 1.3.0 remains the stable baseline. The 1.4.1 branch is a release candidate pending Windows/tablet acceptance. Android CI APKs are debug-signed tests; the separate signed-release workflow requires a persistent user-controlled keystore and verifies its certificate. macOS packages are unsigned tests; iOS packages are Simulator-only. No stable release is published automatically on merge.
+
+See [1.4.1 changes and acceptance checks](docs/V140-SCENE-TOOLS.md) and [Android signing setup](docs/ANDROID_SIGNING.md).
 
 ## What is implemented
 
@@ -61,7 +67,7 @@ Export a project backup from v0.1 before updating. v0.2 uses the same local Inde
 - **Left floating project drawer:** scenes, sets, backgrounds and exports.
 - **Tool rail:** select, pan, actor, camera, wall, door, furniture and simple equipment.
 - **Canvas:** direct drag/rotate interactions, camera field of view and movement paths. Wheel zoom or two-finger pan/pinch.
-- **Beat strip:** select, insert, rename or delete beats. New beat inherits the current beat's states.
+- **Beat strip:** select, insert, rename or delete beats. New beats inherit final motion positions and directions, with movement reset to static.
 - **Layers button:** toggle camera cones, dotted lines, solid camera moves, ghost modes, and select hidden cameras/actors from the roster.
 - **Property panel:** color, orientation, names, position, visibility, camera lens and start/end track movement.
 
@@ -96,17 +102,9 @@ The GitHub repository name intentionally remains `BlockASceneApp` for link compa
 - Offline manual with seven clickable chapters appears in editor Menu and on the project dashboard.
 - Windows v1 is the release checkpoint; macOS and Android APK packaging follow later.
 
-## Windows-only development (October 2026)
+## Historical Windows-only checkpoint
 
-We are intentionally pausing macOS and Android distribution while refining the Windows editor.
-
-- Windows is the **only supported build and download target**. All scene-blocking features, touch support on Windows, offline autosave, and `.blockascene` project backups remain intact.
-- Download the latest Windows-only EXE from [GitHub Releases](https://github.com/strijbosmedia-sudo/BlockASceneApp/releases/latest) or fresh builds from [Windows Actions](https://github.com/strijbosmedia-sudo/BlockASceneApp/actions/workflows/windows-portable.yml).
-- The Mac/Android workflows and packaging integrations are removed from `main`, while Git history preserves their prior versions for future rebuilding.
-- The old cross-platform beta release is retired **after** a new Windows-only release is successfully published, preventing loss of the working download.
-- No editor data-model migration or Windows user-data directory changes are included in this update.
-
-**Next:** collect Windows bugs and improvement requests, agree on a prioritized change log, then implement the next editor update.
+Earlier development temporarily paused mobile distribution. That checkpoint is superseded by the cross-platform test pipelines introduced in 1.3.0. Prior Windows releases remain available.
 
 ## v1.1 Stage 1 functions
 
@@ -161,6 +159,6 @@ See [the v1.2.1 functionality and layout notes](docs/V121-POLISH.md). The v1.2.0
 
 Windows is the approved release baseline. macOS/Android/iOS preliminary packages and the Windows code-signing configuration are described in [Cross-platform build guide](docs/V13-PLATFORMS.md).
 
-## Block4Film v1.4.0: scene production toolkit
+## Block4Film v1.4.1: scene production toolkit
 
-Aspect-preserving floor plans with editable scale, resizable walls, windows, doors and furniture, adjustable camera cone reach, and modular lighting with Kelvin/color and softbox/spot modifiers. Android launcher artwork uses the cropped Block4Film icon. See [the v1.4.0 release notes](docs/V140-SCENE-TOOLS.md). Android tablets currently use a test-signed, clearly named APK until a persistent release signing key is added.
+Aspect-preserving floor plans with editable scale, resizable walls, windows, doors and furniture, adjustable camera cone reach, and modular lighting with Kelvin/color and softbox/spot modifiers. Android launcher artwork uses the cropped Block4Film icon. See [the v1.4.1 release notes](docs/V140-SCENE-TOOLS.md). Android tablets currently use a test-signed, clearly named APK until a persistent release signing key is added.

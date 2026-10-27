@@ -1,0 +1,34 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),os=require('node:os'),path=require('node:path');
+const {configure,versionCode}=require('../scripts/configure-android.cjs');
+assert.equal(versionCode('1.4.0'),10400);
+assert.ok(versionCode('1.4.1')>versionCode('1.4.0'));
+assert.ok(versionCode('1.5.0')>versionCode('1.4.99'));
+assert.throws(()=>versionCode('1.4.0-beta'));
+assert.throws(()=>versionCode('1.100.0'));
+const root=fs.mkdtempSync(path.join(os.tmpdir(),'b4-android-'));
+try{
+ fs.mkdirSync(path.join(root,'android','app'),{recursive:true});
+ fs.mkdirSync(path.join(root,'mobile'));
+ fs.writeFileSync(path.join(root,'package.json'),JSON.stringify({version:'1.4.0'}));
+ fs.writeFileSync(path.join(root,'capacitor.config.json'),JSON.stringify({appId:'media.strijbos.block4film'}));
+ const signing=fs.readFileSync(path.join(__dirname,'../mobile/android-release.gradle'),'utf8');
+ fs.writeFileSync(path.join(root,'mobile','android-release.gradle'),signing);
+ const gradle=path.join(root,'android','app','build.gradle');
+ fs.writeFileSync(gradle,'android { defaultConfig { versionCode 1\nversionName "1.0"\n} }\n');
+ assert.deepEqual(configure(root),{versionName:'1.4.0',versionCode:10400});
+ const first=fs.readFileSync(gradle,'utf8');
+ assert.match(first,/versionCode 10400/);assert.match(first,/versionName "1.4.0"/);
+ configure(root);assert.equal(fs.readFileSync(gradle,'utf8'),first,'native preparation is idempotent');
+ assert.equal(fs.readFileSync(path.join(root,'android','app','block4film-release.gradle'),'utf8'),signing);
+ assert.match(signing,/requestedRelease && !signingReady/);
+ assert.match(signing,/No debug-key fallback/);
+ const workflow=fs.readFileSync(path.join(__dirname,'../.github/workflows/android-release.yml'),'utf8');
+ assert.match(workflow,/assembleRelease/);assert.match(workflow,/apksigner/);
+ assert.match(workflow,/ANDROID_CERT_SHA256/);
+ assert.doesNotMatch(workflow,/assembleDebug|--clobber/);
+ const windows=fs.readFileSync(path.join(__dirname,'../.github/workflows/release.yml'),'utf8');
+ assert.match(windows,/inputs\.publish/);
+ assert.match(windows,/--prerelease/);
+ assert.doesNotMatch(windows,/--clobber|branches: \[main\]/,'publishing requires an explicit accepted-build action');
+}finally{fs.rmSync(root,{recursive:true,force:true})}
+console.log('1.4.0 native version, signing configuration and deliberate release publication passed');
