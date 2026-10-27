@@ -19,11 +19,20 @@ function uniqueColor(project,preferred){const used=new Set(Object.values(project
 function hslToHex(h,s,l){s/=100;l/=100;const a=s*Math.min(l,1-l),f=n=>{const k=(n+h/30)%12;return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1))))};return '#'+[f(0),f(8),f(4)].map(x=>x.toString(16).padStart(2,'0')).join('').toUpperCase()}
 function register(project,type,id,wanted,name,num){project.identities??={};if(project.identities[id])return project.identities[id];const number=num||1+Math.max(0,...Object.values(project.identities).filter(x=>x.type===type).map(x=>x.number||0));const data={type,number,color:uniqueColor(project,wanted),name:name||`${type==='actor'?'Actor':'Camera'} ${type==='actor'?label(number):number}`};project.identities[id]=data;return data}
 function applyIdentity(project,entry,type){const info=register(project,type,entry.id,entry.color,entry.name,entry.number);entry.color=info.color;entry.name=info.name;entry.number=info.number;entry.outline=info.outline||'white';return entry}
+function backgroundFit(sourceWidth,sourceHeight,sceneWidth=1100,sceneHeight=700,scale=1){
+ const sw=Number(sourceWidth),sh=Number(sourceHeight),cw=Number(sceneWidth),ch=Number(sceneHeight);
+ if(![sw,sh,cw,ch].every(Number.isFinite)||Math.min(sw,sh,cw,ch)<=0)return null;
+ const multiplier=Number.isFinite(Number(scale))?Math.max(.25,Math.min(3,Number(scale))):1;
+ // A little breathing room leaves actors, cameras and set elements accessible around the image.
+ const factor=Math.min(cw*.92/sw,ch*.92/sh)*multiplier;
+ const width=sw*factor,height=sh*factor;
+ return{x:(cw-width)/2,y:(ch-height)/2,width,height};
+}
 function defaultCameraState(x=550,y=550){return{x,y,rotation:-90,lens:35,sensor:36,visible:true,motion:null}}
 function defaultActorState(x=400,y=380){return{x,y,rotation:-90,visible:true}}
 function defaultEquipmentState(x=500,y=400){return{x,y,rotation:0,visible:true}}
 function migrate(project){if(!project||!Array.isArray(project.sets)||!Array.isArray(project.scenes)||!project.id||!project.name)throw Error('Not a BlockaScene project');
- const p=clone(project);p.identities??={};for(const set of p.sets){set.objects??=[];set.opacity??=.8;}
+ const p=clone(project);p.identities??={};for(const set of p.sets){set.objects??=[];set.opacity??=.8;set.backgroundScale=Number.isFinite(Number(set.backgroundScale))?Math.max(.25,Math.min(3,Number(set.backgroundScale))):1;}
  // Existing colors and IDs survive the upgrade. Camera v1 setups become per-beat camera states.
  for(const s of p.scenes){if(!p.sets.some(st=>st.id===s.setId))throw Error('Scene references a missing floor plan');s.actors??=[];s.cameras??=[];s.equipment??=[];s.beats??=[];
   for(const actor of s.actors)applyIdentity(p,actor,'actor');
@@ -39,7 +48,7 @@ function migrate(project){if(!project||!Array.isArray(project.sets)||!Array.isAr
  p.schemaVersion=VERSION;return p;
 }
 function createProject(name='Untitled Film'){
- const p={id:uid(),name,updatedAt:Date.now(),schemaVersion:VERSION,identities:{},sets:[],scenes:[]};const set={id:uid(),name:'Apartment Living Room',background:'./assets/demo-plan.svg',opacity:.7,objects:[]};p.sets.push(set);
+ const p={id:uid(),name,updatedAt:Date.now(),schemaVersion:VERSION,identities:{},sets:[],scenes:[]};const set={id:uid(),name:'Apartment Living Room',background:'./assets/demo-plan.svg',backgroundScale:1,opacity:.7,objects:[]};p.sets.push(set);
  const a={id:uid()},b={id:uid()},c1={id:uid()},c2={id:uid()};applyIdentity(p,{...a,name:'Alex'},'actor');
  const actor1=applyIdentity(p,{id:a.id},'actor'),actor2=applyIdentity(p,{id:b.id,name:'Sam'},'actor');
  const cam1=applyIdentity(p,{id:c1.id,name:'Master'},'camera'),cam2=applyIdentity(p,{id:c2.id,name:'Close-up'},'camera');
@@ -118,5 +127,5 @@ function setBeatVisibility(scene,type,id,beatId,visible){
 }
 function setOutline(project,id,outline){if(!['white','black'].includes(outline))return false;const item=project.identities?.[id];if(item)item.outline=outline;for(const s of project.scenes)for(const v of [...s.actors,...s.cameras])if(v.id===id)v.outline=outline;return true}
 function rename(project,id,newName){const info=project.identities?.[id];if(info)info.name=newName;for(const scene of project.scenes)for(const entity of [...scene.actors,...scene.cameras,...scene.equipment])if(entity.id===id)entity.name=newName}
-return {VERSION,PRESET,clone,uid,label,normalizeAngle,register,applyIdentity,uniqueColor,migrate,createProject,nextBeat,finalBeatState,addIdentity,nextAvailableNumber,numberAvailable,setIdentityNumber,recolor,rename,setOutline,setBeatVisibility,defaultActorState,defaultCameraState,defaultEquipmentState};
+return {VERSION,PRESET,clone,uid,label,normalizeAngle,register,applyIdentity,uniqueColor,migrate,createProject,nextBeat,finalBeatState,addIdentity,nextAvailableNumber,numberAvailable,setIdentityNumber,recolor,rename,setOutline,setBeatVisibility,backgroundFit,defaultActorState,defaultCameraState,defaultEquipmentState};
 });
