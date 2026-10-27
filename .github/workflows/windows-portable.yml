@@ -26,7 +26,7 @@ jobs:
       - name: Upload Windows EXE as artifact
         uses: actions/upload-artifact@v4
         with:
-          name: BlockaScene-Windows-Portable
+          name: Block4Film-Windows-Portable
           path: dist/*.exe
           if-no-files-found: error
           retention-days: 14
