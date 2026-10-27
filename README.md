@@ -1,4 +1,4 @@
-# Block4Film v1.1.2 (Functional Polish)
+# Block4Film v1.2.0 (Cinematic Visual Redesign Beta)
 
 **Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor currently developed and distributed for Windows.
 
@@ -148,3 +148,7 @@ See [the detailed change list](docs/V111-FIXES.md).
 ## v1.1.2 final functional polish
 
 See [layout and focus fixes](docs/V112-POLISH.md). The visual redesign comes next after Windows acceptance testing.
+
+## Stage 2 redesign
+
+The v1.2.0 beta implements the charcoal visual system, workspace/scene libraries, Beat 1 previews, custom cover uploads, editor refinement and consistent dialogs. See [Stage 2 redesign notes](docs/V12-REDESIGN.md). Prior Windows releases remain available.
