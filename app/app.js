@@ -259,7 +259,7 @@ function inspector(){
    const motion=state.motion,keys=[...(motion.keys||[])].sort((a,b)=>a.t-b.t);
    content+=`<div class="divider"></div>${option('Motion path','motionPath',[['linear','Straight segments'],['smooth','Smooth curves']],motion.pathType||'linear')}
     <div class="keyframe-head"><strong>Movement keyframes</strong>${btn('add-motion-keyframe','+','Add keyframe','small')}</div>
-    <p class="help">Drag keyframe diamonds on the canvas to bend the path. Adjust time, position and direction here.</p>
+    <p class="help">Drag keyframe diamonds to bend the path. Adjust timing and direction for turns and pans.</p>
     ${keys.map((k,i)=>`<div class="keyframe-row"><div class="keyframe-head"><b>Keyframe ${i+1}</b><button data-action="remove-motion-keyframe" data-id="${esc(k.id)}" aria-label="Remove keyframe ${i+1}">×</button></div>
       <div class="two-fields">${prop('Time (%)','keyframe:'+k.id+':t',Math.round(k.t*100),'number','min="1" max="99" step="1"')}${prop('Direction (°)','keyframe:'+k.id+':rotation',Math.round(M.normalizeAngle(k.rotation)),'number','step="1"')}</div>
       <div class="two-fields">${prop('X','keyframe:'+k.id+':x',Math.round(k.x),'number')}${prop('Y','keyframe:'+k.id+':y',Math.round(k.y),'number')}</div></div>`).join('')}</div>`;
@@ -568,7 +568,7 @@ function onMove(e){
  }else if(['keyframe','key-rotate'].includes(drag.mode)&&state.motion){
   const key=state.motion.keys?.find(k=>k.id===drag.keyId);if(!key)return;
   const w=world(p);
-  if(drag.mode==='keyframe'){key.x=w.x;key.y=w.y}
+  if(drag.mode==='keyframe'&&!['pan','turn'].includes(state.motion.kind)){key.x=w.x;key.y=w.y}
   else{let angle=deg(Math.atan2(w.y-key.y,w.x-key.x));if(e.shiftKey)angle=Math.round(angle/15)*15;key.rotation=angle}
  }
  paint();
@@ -706,13 +706,13 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
  else if(a==='new-scene')openEditDialog('new-scene');else if(a==='new-set')openEditDialog('new-set');else if(a==='choose-beat')chooseBeat(id);else if(a==='add-beat')addBeat();
  else if(a==='previous-beat'||a==='next-beat'){const list=scene().beats,idx=list.findIndex(b=>b.id===ui.beatId),step=a==='next-beat'?1:-1;chooseBeat(list[clamp(idx+step,0,list.length-1)].id)}
  else if(a==='add-motion-keyframe'){
-  const s=stateOf();if(s?.motion&&!['pan','turn'].includes(s.motion.kind)){
+  const s=stateOf();if(s?.motion){
    checkpoint();const keys=s.motion.keys||[],times=[0,...keys.map(k=>k.t).sort((a,b)=>a-b),1];let best=0,t=.5;
    for(let i=1;i<times.length;i++)if(times[i]-times[i-1]>best){best=times[i]-times[i-1];t=(times[i]+times[i-1])/2}
    const point=P.animateCameraPosition(s,t);
    s.motion.keys=[...keys,{id:M.uid(),t,x:point.x,y:point.y,rotation:point.rotation}].sort((a,b)=>a.t-b.t);
    s.motion.pathType='smooth';save();render();
-  }else notice('Choose a positional move to add keyframes.');
+  }else notice('Choose a movement before adding keyframes.');
  }
  else if(a==='remove-motion-keyframe'){
   const s=stateOf();if(s?.motion?.keys){checkpoint();s.motion.keys=s.motion.keys.filter(k=>k.id!==id);save();render()}
