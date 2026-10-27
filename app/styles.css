@@ -136,3 +136,31 @@ input[type=range],input[type=checkbox]{accent-color:var(--brand-red)}
 .timeline.collapsed .beats,.timeline.collapsed .playback-controls,.timeline.collapsed .timeline-controls{display:none}
 .timeline.collapsed .timeline-head{margin:0;min-height:30px}
 @media(max-width:720px){.work-canvas .inspector,.work-canvas .layers-pop{position:absolute;inset:auto 55px 6px 8px;width:auto!important;max-height:55%;height:auto;border-radius:10px;box-shadow:0 12px 30px #000b;overflow:auto;z-index:7}.work-canvas .layers-pop{top:7px;bottom:auto}.utility-rail{position:absolute;right:0;top:0;bottom:0;z-index:9}.stage{margin-right:49px}.panel-resizer{display:none}}
+
+/* v1.1 beat actions and editor dialogs */
+.beat-chip{position:relative;padding-right:26px}
+.beat-more{position:absolute;right:3px;top:2px;min-width:28px;min-height:28px;padding:3px 7px;border-radius:5px;color:#E0E0E4;font-size:18px;z-index:1;display:flex;align-items:center;justify-content:center}
+.beat-more:hover{background:#45454c}
+.context-mask{position:fixed;inset:0;z-index:38;background:transparent}
+.context-menu{position:fixed;z-index:39;background:#25262d;border:1px solid #494a55;border-radius:12px;box-shadow:0 18px 55px #000b;min-width:190px;padding:6px}
+.context-menu button{width:100%;display:block;text-align:left;padding:11px 13px;border-radius:7px;min-height:40px;font-size:13px}
+.context-menu button:hover{background:#3b3d45}
+.context-menu .is-danger{color:#f39c9c}
+.context-title{font-size:10px;font-weight:700;letter-spacing:1px;color:#92939d;text-transform:uppercase;padding:9px 11px 6px}
+.dialog-mask{position:fixed;inset:0;background:#000a;z-index:45;display:flex;align-items:center;justify-content:center;padding:18px}
+.dialog-card{background:#24252b;border:1px solid #44464f;border-radius:15px;width:min(460px,100%);max-height:92vh;overflow:auto;padding:20px;box-shadow:0 22px 70px #000c}
+.dialog-card header{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:0 0 19px}
+.dialog-card h2{font-size:20px;margin:0}
+.dialog-card header button{width:40px;height:40px;border-radius:8px;font-size:22px}
+.dialog-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:19px;flex-wrap:wrap}
+.dialog-actions button{border:1px solid #44464f;border-radius:8px;background:#34353c;padding:10px 13px;min-height:42px;font-size:12px}
+.dialog-actions .dialog-confirm{background:#E05344;color:white;border-color:#E05344}
+.project-overview .overview-subheading{margin-top:38px;font-size:16px}
+.set-overview-list{display:flex;gap:9px;flex-wrap:wrap}
+.overview-set{display:flex;align-items:center;gap:14px;border:1px solid #34363f;border-radius:10px;background:#222329;padding:8px 10px;font-size:13px}
+.overview-set button{font-size:21px;min-width:34px}
+.new-tile{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:260px;color:#C4C5CB}
+.new-tile .plus{font-size:46px;color:#E05344;font-weight:300}
+.drawer-row{display:flex;align-items:center;gap:1px;padding-right:7px}
+.drawer-row .drawer-item{flex:1;margin-right:0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.drawer-row>.more{flex:0 0 38px;width:38px;min-height:38px;font-size:21px}
