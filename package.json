@@ -1,19 +1,21 @@
 {
   "name": "blockascene",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "Block4Film offline scene blocking editor for desktop and tablet",
   "main": "desktop/main.cjs",
   "author": "Block4Film",
   "license": "UNLICENSED",
   "scripts": {
-    "start": "electron .",
-    "dist:win": "electron-builder --win portable --x64 --publish never",
-    "test:model": "node tests/model.test.cjs && node tests/playback.test.cjs"
+    "start": "npm run icons && electron .",
+    "dist:win": "npm run icons && electron-builder --win portable --x64 --publish never",
+    "test:model": "node tests/model.test.cjs && node tests/playback.test.cjs",
+    "icons": "node scripts/build-icons.cjs"
   },
   "devDependencies": {
     "electron": "^38.0.0",
-    "electron-builder": "^26.0.0"
+    "electron-builder": "^26.0.0",
+    "sharp": "^0.34.3"
   },
   "build": {
     "appId": "film.blockascene.app",
@@ -36,7 +38,8 @@
           ]
         }
       ],
-      "artifactName": "BlockaScene-${version}-Portable.${ext}"
+      "artifactName": "Block4Film-${version}-Portable.${ext}",
+      "icon": "app/assets/Block4Film.ico"
     },
     "artifactName": "Block4Film-${version}-Portable.${ext}"
   }
