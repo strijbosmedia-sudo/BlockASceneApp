@@ -185,7 +185,7 @@ function render(){
   }
   const fields=app.querySelectorAll?.('.dialog-card input,.dialog-card select,.dialog-card textarea')||[];
   const focused=focusKey?[...fields].find(el=>(el.id||el.name)===focusKey):null;
-  const target=focused||(key!==lastRenderedDialogKey?app.querySelector('#entityEditName')||app.querySelector('#beatEditName'):null);
+  const target=focused||(key!==lastRenderedDialogKey?app.querySelector?.('#entityEditName')||app.querySelector?.('#beatEditName'):null);
   if(target?.focus){
    target.focus({preventScroll:true});
    if(focused&&caret&&typeof target.setSelectionRange==='function')try{target.setSelectionRange(caret[0],caret[1])}catch{}
