@@ -55,7 +55,7 @@ jobs:
       - name: Publish Windows release and retire cross-platform beta
         env:
           GH_TOKEN: ${{ github.token }}
-          WINDOWS_TAG: v1.3.0
+          WINDOWS_TAG: v1.3.1-tablet-motion-beta.1
         run: |
           set -euo pipefail
           ls -lh release-assets/*.exe
@@ -64,7 +64,8 @@ jobs:
           else
             gh release create "$WINDOWS_TAG" release-assets/*.exe \
               --target "$GITHUB_SHA" \
-              --title "Block4Film 1.3.0 - strijbos.media Windows Release" \
-              --notes "Block4Film 1.3.0: approved cinematic Windows release, publisher branding strijbos.media. Includes Workspace, scene editor, preview images, panel docking, playback, project backups and v1.2.1 polish. Windows Authenticode signing is enabled only when a trusted certificate is configured in CI. Unsigned EXEs may still show Unknown publisher. macOS/Android/iOS builds are separate preview pipelines and are not certified production releases. Back up projects before installing."
+              --title "Block4Film 1.3.1 - Tablet Motion & Keyframes Beta" \
+              --notes "Block4Film 1.3.1 tablet movement beta: touch tap-to-select and brief hold-to-move, stable move destinations, actor turn and camera pan within beats, editable curved motion keyframes, final destination facing control, and next-beat inheritance of end poses. Windows and Android testing encouraged. Existing stable v1.3.0 remains available. Back up your .blockascene files before testing." \
+              --prerelease
           fi
           gh release view "$WINDOWS_TAG" --json assets --jq '.assets[].name' | grep -qE '\.exe$'
