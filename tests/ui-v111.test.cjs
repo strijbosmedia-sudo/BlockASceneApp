@@ -16,7 +16,7 @@ let src=fs.readFileSync(path.join(__dirname,'../app/app.js'),'utf8');
 // Disable only canvas painting for this isolated interaction test. Rendering and navigation still run.
 src=src.replace("if(ui.page==='editor'&&scene())initCanvas()","if(false)initCanvas()");
 const marker=src.lastIndexOf('})();');assert.ok(marker>0);
-src=src.slice(0,marker)+"globalThis.__v111={ui,database,dashboard,projectOverview,modal,contextMenu,manageItem,saveEntityDialog,openEditDialog,render};\\n"+src.slice(marker);
+src=src.slice(0,marker)+"globalThis.__v111={ui,database,dashboard,projectOverview,modal,contextMenu,manageItem,saveEntityDialog,openEditDialog,render};\n"+src.slice(marker);
 vm.runInNewContext(src,sandbox);
 const u=sandbox.__v111;
 assert.equal(u.database.projects.length,0);
