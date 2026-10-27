@@ -3,3 +3,7 @@ dist/
 .DS_Store
 *.log
 *.zip
+
+# Generated from designer-supplied SVG during npm run icons
+app/assets/Block4Film.ico
+app/assets/Block4Film-Icon.png

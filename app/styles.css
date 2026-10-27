@@ -74,3 +74,14 @@
 .beat-visibility-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .beat-visibility-row em{font-size:9px;font-style:normal;color:#A4A4AE}
 @media(max-width:720px){.layers-pop,.export-pop{left:8px;right:auto;top:7px;bottom:7px;max-height:calc(100% - 14px);width:min(320px,calc(100vw - 16px))}.beat-visibility{grid-column:span 2}.beat-visibility-list{max-height:180px}}
+
+/* v0.3.2: original SVG visual identity and direct Home navigation */
+.home-link.action{min-width:40px;width:40px;height:40px;min-height:40px;padding:0;border:0;background:transparent;border-radius:7px;color:#aeb0b7}
+.home-link:hover,.home-link:focus-visible{background:#222226;color:#fafafa}
+.home-link .glyph{display:flex;align-items:center;justify-content:center;line-height:1}
+.startup-brand{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;width:100%;max-width:580px;padding:28px 36px;animation:brand-enter 450ms ease-out both}
+.startup-icon{width:clamp(72px,11vw,116px);height:clamp(72px,11vw,116px);object-fit:contain}
+.startup-wordmark{width:min(100%,440px);height:auto;display:block;object-fit:contain}
+@keyframes brand-enter{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:650px){.top-left{gap:4px}.home-link.action{width:40px;min-width:40px;height:40px}.brand{margin-left:5px}.startup-brand{gap:12px;padding:18px 32px}.startup-icon{width:78px;height:78px}.startup-wordmark{width:min(100%,325px)}}
+@media(prefers-reduced-motion:reduce){.startup-brand{animation:none}}
