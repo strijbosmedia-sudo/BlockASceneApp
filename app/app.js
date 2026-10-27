@@ -268,7 +268,7 @@ function inspector(){
   if(sel.type==='equipment'){content+=`${check('lockToSet','Lock position across beats',!!d.lockToSet)}<p class="help">Simple diagram symbol. Rename it to the real item on set.</p>`}
   content+=`${btn('delete-selection','⌫','Delete object','danger wide')}`;
  }else if(sel.type==='setobj'&&state){content=`<h3>Set object</h3>${prop('Name','itemName',state.name||'')}${prop('X','x',state.x,'number')}${prop('Y','y',state.y,'number')}${prop('Rotation','rotation',state.rotation||0,'number')}${btn('delete-selection','⌫','Delete object','danger wide')}`}
- else if(sel.type==='background'){content=`<h3>Floor plan</h3>${prop('Set name','setName',set().name)}${prop('Opacity (%)','opacity',Math.round((set().opacity??.8)*100),'range','min="5" max="100"')}${check('darken','Darken imported image',set().darken!==false)}${btn('import-bg','▧','Replace floor plan','wide')}${btn('clear-bg','×','Remove image','danger wide')}`}
+ else if(sel.type==='background'){content=`<h3>Floor plan</h3>${prop('Set name','setName',set().name)}${prop('Image scale (%)','backgroundScale',Math.round((set().backgroundScale??1)*100),'range','min="25" max="300" step="5"')}${prop('Opacity (%)','opacity',Math.round((set().opacity??.8)*100),'range','min="5" max="100"')}${check('darken','Darken imported image',set().darken!==false)}${btn('import-bg','▧','Replace floor plan','wide')}${btn('clear-bg','×','Remove image','danger wide')}`}
  const m=panelMeta('properties');return `<aside class="inspector ${m.pinned?'docked':'panel-float'}" data-panel="properties" data-side="${m.side}" data-moved="${m.moved}" style="${panelStyle('properties')}"><div class="inspector-head panel-header" data-drag-panel="properties"><span>OBJECT PROPERTIES</span>${panelButtons('properties')}</div><div class="inspect-body">${content}</div>${panelGrip('properties')}</aside>`}
 function layers(){if(!ui.showLayers)return '';const objects=[...scene().actors.map(o=>({...o,kind:'actor'})),...scene().cameras.map(o=>({...o,kind:'camera'})),...scene().equipment.map(o=>({...o,kind:'equipment'}))];const m=panelMeta('layers');return `<aside class="layers-pop side-pop ${m.pinned?'docked':'panel-float'}" data-panel="layers" data-side="${m.side}" data-moved="${m.moved}" style="${panelStyle('layers')}" aria-label="Canvas layers"><div class="panel-head panel-header" data-drag-panel="layers"><strong>Layers & visibility</strong>${panelButtons('layers')}</div><div class="layers-body">${check('showCones','Camera field of view',ui.showCones)}${check('showPaths','Dotted beat-to-beat paths',ui.showPaths)}${check('showCameraMoves','Solid camera moves',ui.showCameraMoves)}${option('Other beat positions','ghostMode',[['off','Off'],['adjacent','Previous + Next'],['all','All beats']],ui.ghostMode)}<div class="object-roster"><strong>SCENE OBJECTS</strong>${objects.map(o=>{const state=stateOf({type:o.kind,id:o.id});return `<button class="roster-item" data-action="select-object" data-id="${o.id}" data-kind="${o.kind}"><span class="roster-dot" style="background:${o.color}"></span>${esc(o.kind==='actor'?M.label(o.number)+' · '+o.name:o.kind==='camera'?'Cam '+o.number+' · '+o.name:o.name)}${state?.visible===false||!state?'<em>HIDDEN</em>':''}</button>`}).join('')}</div></div>${panelGrip('layers')}</aside>`}
 const exportPrefs=()=>({imageGhosts:false,videoGhosts:false,cones:true,paths:false,...project()?.exportPrefs});
@@ -309,7 +309,7 @@ function modal(){
    const mode=chosen?'Custom image':'Automatic · Beat 1';
    return `<section class="preview-editor"><div class="preview-editor-heading"><strong>${group} preview image</strong><small>${mode}</small></div><div class="preview-editor-image">${image?`<img src="${esc(image)}" alt="${esc(group)} preview"/>`:`<div class="preview-empty">${iconMark('image')}<span>Beat 1 preview will appear after saving</span></div>`}</div><p class="help">Automatically generated from the saved first beat. An uploaded image stays until reset.</p><div class="preview-editor-actions"><button data-action="choose-preview-image">${iconMark('upload')} Choose image</button><button data-action="reset-preview-image">${iconMark('image')} Use automatic</button></div></section>`;
   })():'';
-  const floorDetails=d.kind==='edit-set'?`<label class="field"><span>Image opacity (%)</span><input type="number" min="5" max="100" step="5" id="entityEditOpacity" value="${Math.round((item?.opacity??.8)*100)}"/></label><label class="switch"><span>Darken imported image</span><input type="checkbox" id="entityEditDarken" ${item?.darken!==false?'checked':''}/></label><div class="set-dialog-actions"><button data-action="replace-set-background">Replace / import image</button><button data-action="clear-set-background">Remove image</button><small>${item?.background?'Image attached':'No image attached'}</small></div>`:'';
+  const floorDetails=d.kind==='edit-set'?`<label class="field"><span>Floor plan scale: <output id="entityEditScaleValue">${Math.round((item?.backgroundScale??1)*100)}%</output></span><input type="range" id="entityEditScale" min="25" max="300" step="5" value="${Math.round((item?.backgroundScale??1)*100)}" aria-label="Floor plan scale"/></label><p class="help">100% fits the original image proportionally. Scaling will never stretch it.</p><label class="field"><span>Image opacity (%)</span><input type="number" min="5" max="100" step="5" id="entityEditOpacity" value="${Math.round((item?.opacity??.8)*100)}"/></label><label class="switch"><span>Darken imported image</span><input type="checkbox" id="entityEditDarken" ${item?.darken!==false?'checked':''}/></label><div class="set-dialog-actions"><button data-action="replace-set-background">Replace / import image</button><button data-action="clear-set-background">Remove image</button><small>${item?.background?'Image attached':'No image attached'}</small></div>`:'';
   return `<div class="dialog-mask"><section class="dialog-card" role="dialog" aria-modal="true" aria-label="${esc(title)}"><header><h2>${esc(title)}</h2><button data-action="close-dialog" aria-label="Close">×</button></header><label class="field"><span>${esc(group)} name</span><input id="entityEditName" value="${esc(item?.name||(group==='Project'?'Untitled Film':group==='Scene'?'New scene':'New floor plan'))}" maxlength="100"/></label>${setPicker}${floorDetails}${previewDetails}<div class="dialog-actions"><button data-action="close-dialog">Cancel</button><button class="dialog-confirm" data-action="save-entity-dialog">${create?'Create':'Save changes'}</button></div></section></div>`
  }
 
@@ -416,7 +416,7 @@ function draw(g,width,height,opts={}){const s=scene(),location=set();if(!s||!loc
  g.clearRect(0,0,width,height);g.fillStyle='#0B0C0F';g.fillRect(0,0,width,height);
  if(!exportMode){g.save();g.strokeStyle='#202127';g.lineWidth=.8;const gap=48*view.scale,ox=((view.x%gap)+gap)%gap,oy=((view.y%gap)+gap)%gap;g.beginPath();for(let x=ox;x<width;x+=gap){g.moveTo(x,0);g.lineTo(x,height)}for(let y=oy;y<height;y+=gap){g.moveTo(0,y);g.lineTo(width,y)}g.stroke();g.restore()}
  g.save();g.translate(view.x,view.y);g.scale(view.scale,view.scale);
- const bg=cached(location.background);if(bg){g.save();g.globalAlpha=location.opacity??.75;g.filter=location.darken===false?'none':'brightness(.52) contrast(1.2)';g.drawImage(bg,0,0,W,H);g.restore()}
+ const bg=cached(location.background);if(bg){const rect=M.backgroundFit(bg.naturalWidth||bg.width,bg.naturalHeight||bg.height,W,H,location.backgroundScale??1);if(rect){g.save();g.globalAlpha=location.opacity??.75;g.filter=location.darken===false?'none':'brightness(.52) contrast(1.2)';g.drawImage(bg,rect.x,rect.y,rect.width,rect.height);g.restore()}}
  for(const obj of location.objects)drawSetObject(g,obj);
  if(opts.frame){const frame=opts.frame,mode=opts.mode||'move',cones=opts.cones??(exportMode?exportPrefs().cones:ui.showCones),frameGhosts=opts.ghost??(exportMode?false:ui.ghostMode!=='off');if((opts.paths??(!exportMode&&ui.showPaths)))drawDottedBeatPaths(g,s,frame.index,frameGhosts);if(frameGhosts)drawGhostStates(g,s,frame.index,exportMode?'adjacent':ui.ghostMode,false);const drawState=(state,alpha=1,asGhost=false)=>{if(!state||alpha<=0)return;for(const e of s.equipment)drawEquipment(g,e,e.lockToSet?e.fixedState:state.equipment[e.id],asGhost,alpha);for(const c of s.cameras)drawCamera(g,c,state.cameras[c.id],asGhost,false,!asGhost&&cones,alpha);for(const a of s.actors)drawActor(g,a,state.positions[a.id],asGhost,alpha)};
   if(frame.phase==='transition'&&mode!=='move'){const p=frame.progress;drawState(frame.fromStates,1-p,mode==='ghost');drawState(frame.toStates,p,false)}else drawState(frame.states,1,false);
@@ -615,7 +615,7 @@ function edit(name,value){const sel=ui.selection,d=detailsOf(sel),o=stateOf(sel)
  checkpoint();if(name==='itemName'){if(sel?.type==='setobj')o.name=value;else if(d)M.rename(p,d.id,value)}
  else if(name==='itemOutline'&&d&&(sel.type==='actor'||sel.type==='camera')){M.setOutline(p,d.id,value)}
  else if(name==='itemColor'&&d){const error=sel.type==='equipment'?(d.color=value,null):M.recolor(p,d.id,value);if(error){notice(error);undo.pop();render();return}}
- else if(name==='setName')loc.name=value;else if(name==='opacity')loc.opacity=Number(value)/100;else if(name==='darken')loc.darken=value;
+ else if(name==='setName')loc.name=value;else if(name==='backgroundScale')loc.backgroundScale=clamp(Number(value)/100,.25,3);else if(name==='opacity')loc.opacity=Number(value)/100;else if(name==='darken')loc.darken=value;
  else if(name==='lockToSet'&&d){if(value){d.fixedState=M.clone(o||M.defaultEquipmentState());d.lockToSet=true}else{for(const b of scene().beats)b.equipment[d.id]=M.clone(d.fixedState);d.lockToSet=false}}
  else if(name==='motionKind'&&['camera','actor'].includes(sel?.type)&&o){
   if(value==='static')o.motion=null;
@@ -649,7 +649,7 @@ function createScene(name,setId){
  p.scenes.push(newScene);ui.sceneId=newScene.id;ui.beatId=newScene.beats[0].id;ui.selection=null;ui.showMenu=false;ui.dialog=null;ui.page='editor';ui.autoFit=true;save();render()
 }
 function createSet(name){
- const p=project();if(!p)return;checkpoint();const obj={id:M.uid(),name,background:null,opacity:.8,darken:true,objects:[]};
+ const p=project();if(!p)return;checkpoint();const obj={id:M.uid(),name,background:null,backgroundScale:1,opacity:.8,darken:true,objects:[]};
  p.sets.push(obj);ui.showMenu=false;ui.dialog={kind:'edit-set',id:obj.id};save();render()
 }
 function openEditDialog(kind,id=null){ui.context=null;ui.showMenu=false;ui.previewDraft=undefined;ui.dialog={kind,id};render()}
@@ -665,7 +665,7 @@ function saveEntityDialog(){
  checkpoint();item.name=name;
  if(['edit-project','edit-scene'].includes(d.kind)&&ui.previewDraft!==undefined)item.customPreview=ui.previewDraft||null;
  if(d.kind==='edit-scene'){const setId=app.querySelector('#entityEditSet')?.value;if(p.sets.some(x=>x.id===setId))item.setId=setId}
- if(d.kind==='edit-set'){const opacity=Number(app.querySelector('#entityEditOpacity')?.value);if(Number.isFinite(opacity))item.opacity=clamp(opacity/100,.05,1);item.darken=!!app.querySelector('#entityEditDarken')?.checked}
+ if(d.kind==='edit-set'){const opacity=Number(app.querySelector('#entityEditOpacity')?.value),scale=Number(app.querySelector('#entityEditScale')?.value);if(Number.isFinite(opacity))item.opacity=clamp(opacity/100,.05,1);if(Number.isFinite(scale))item.backgroundScale=clamp(scale/100,.25,3);item.darken=!!app.querySelector('#entityEditDarken')?.checked}
  ui.dialog=null;ui.previewDraft=undefined;save();render();notice('Changes saved')
 }
 
@@ -830,6 +830,7 @@ app.addEventListener('pointermove',e=>{if(holdStart&&Math.hypot(e.clientX-holdSt
 app.addEventListener('pointerup',()=>{clearTimeout(holdTimer);holdStart=null});
 app.addEventListener('pointercancel',()=>{clearTimeout(holdTimer);holdStart=null});
 app.addEventListener('input',e=>{
+ if(e.target?.id==='entityEditScale'){const output=app.querySelector('#entityEditScaleValue');if(output)output.textContent=e.target.value+'%';return}
  if(e.target?.id!=='librarySearch')return;
  ui.libraryFilter=e.target.value;
  const q=ui.libraryFilter.trim().toLowerCase();
