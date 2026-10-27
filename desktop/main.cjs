@@ -9,6 +9,7 @@ app.whenReady().then(()=>{
   const window = new BrowserWindow({
     width:1480,height:920,minWidth:860,minHeight:580,
     backgroundColor:'#000000',title:'Block4Film',
+    icon:path.join(__dirname,'..','app','assets','Block4Film-Icon.png'),
     autoHideMenuBar:true,
     webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}
   });
