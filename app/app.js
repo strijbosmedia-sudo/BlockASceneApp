@@ -178,7 +178,35 @@ function manageItem(kind,id,cmd){
  if(cmd==='open'){if(kind==='project')openProject(id);else if(kind==='scene')openScene(id);return}
  
  if(cmd==='duplicate'){checkpoint();const copy=M.clone(item);copy.id=M.uid();copy.name=item.name+' copy';if(kind==='project'){copy.updatedAt=Date.now();database.projects.push(copy)}else if(kind==='scene'){copy.beats.forEach(b=>b.id=M.uid());p.scenes.push(copy)}else{copy.objects.forEach(o=>o.id=M.uid());p.sets.push(copy)}save();render();return}
- if(cmd==='delete'){if(kind==='set'&&p.sets.length<2)return notice('Keep at least one floor plan');if(kind==='scene'&&p.scenes.length<2)return notice('Keep at least one scene');if(!confirm('Delete '+item.name+'? Export a backup first.'))return;checkpoint();if(kind==='project'){database.projects=database.projects.filter(v=>v.id!==id);if(ui.projectId===id)home()}else if(kind==='scene'){p.scenes=p.scenes.filter(v=>v.id!==id);if(ui.sceneId===id){ui.sceneId=p.scenes[0]?.id;ui.beatId=null}}else{p.sets=p.sets.filter(v=>v.id!==id);p.scenes.forEach(s=>{if(s.setId===id)s.setId=p.sets[0].id})}save();render()}
+ if(cmd==='delete'){if(kind==='set'&&p.sets.length<2)return notice('Keep at least one floor plan');if(kind==='scene'&&p.scenes.length<2)return notice('Keep at least one scene');ui.dialog={kind:'confirm-delete',targetKind:kind,id,name:item.name};render();return}
+}
+function applyConfirmedDelete(){
+ const d=ui.dialog;if(d?.kind!=='confirm-delete')return;
+ const kind=d.targetKind,id=d.id,p=project();
+ ui.dialog=null;
+ if(kind==='beat'){
+  const s=scene(),i=s?.beats.findIndex(b=>b.id===id);
+  if(i==null||i<0||s.beats.length<2)return render();
+  stopPlayback();checkpoint();s.beats.splice(i,1);ui.beatId=s.beats[Math.min(i,s.beats.length-1)].id;ui.selection=null;save();render();return;
+ }
+ if(kind==='project'){
+  if(!database.projects.some(v=>v.id===id))return render();
+  database.projects=database.projects.filter(v=>v.id!==id);
+  if(ui.projectId===id)home();else render();
+  save();return;
+ }
+ if(!p)return render();
+ checkpoint();
+ if(kind==='scene'){
+  if(p.scenes.length<2)return render();
+  p.scenes=p.scenes.filter(v=>v.id!==id);
+  if(ui.sceneId===id){ui.sceneId=p.scenes[0]?.id;ui.beatId=null;ui.selection=null}
+ }else if(kind==='set'){
+  if(p.sets.length<2)return render();
+  p.sets=p.sets.filter(v=>v.id!==id);
+  p.scenes.forEach(sc=>{if(sc.setId===id)sc.setId=p.sets[0].id});
+ }
+ save();render();
 }
 function openScene(id){stopPlayback();ui.sceneId=id;ui.beatId=null;ui.selection=null;ui.showInspector=false;ui.page='editor';ui.showMenu=false;ui.autoFit=true;render()}
 
@@ -231,10 +259,11 @@ function beatCommand(id,command){
  if(command==='edit'){ui.dialog={kind:'edit-beat',id};render();return}
  
  if(command==='duplicate'){stopPlayback();checkpoint();const copy=M.clone(b);copy.id=M.uid();copy.name=b.name+' copy';s.beats.splice(i+1,0,copy);ui.beatId=copy.id;save();render();return}
- if(command==='delete'){if(s.beats.length===1)return notice('A scene needs at least one beat');if(!confirm('Delete beat "'+b.name+'"?'))return;stopPlayback();checkpoint();s.beats.splice(i,1);ui.beatId=s.beats[Math.min(i,s.beats.length-1)].id;save();render()}
+ if(command==='delete'){if(s.beats.length===1)return notice('A scene needs at least one beat');ui.dialog={kind:'confirm-delete',targetKind:'beat',id,name:b.name};render()}
 }
 function modal(){
  const d=ui.dialog;if(!d)return '';
+ if(d.kind==='confirm-delete')return `<div class="dialog-mask"><section class="dialog-card confirm-card" role="alertdialog" aria-modal="true" aria-label="Confirm deletion"><div class="confirm-symbol">${iconMark('trash')}</div><h2>Delete ${esc(d.targetKind==='set'?'floor plan':d.targetKind)}?</h2><p>Delete <strong>${esc(d.name)}</strong>? This action cannot be undone. Export a project backup first if you need to keep it.</p><div class="dialog-actions"><button data-action="close-dialog">Cancel</button><button class="dialog-confirm danger-confirm" data-action="confirm-delete">Delete ${esc(d.targetKind==='set'?'floor plan':d.targetKind)}</button></div></section></div>`;
 
  const entityKinds=['new-project','edit-project','new-scene','edit-scene','new-set','edit-set'];
  if(entityKinds.includes(d.kind)){
@@ -441,9 +470,6 @@ function edit(name,value){const sel=ui.selection,d=detailsOf(sel),o=stateOf(sel)
  else if(o&&['x','y','rotation','lens','sensor'].includes(name)){const before={...o};o[name]=Number(value);if(name==='x'&&o.motion)o.motion.endX+=o.x-before.x;if(name==='y'&&o.motion)o.motion.endY+=o.y-before.y}
  else if(name==='visible'&&o)o.visible=value;
  save();setTimeout(render,0)}
-function projectAction(type,id){const p=database.projects.find(pr=>pr.id===id);if(!p)return;const action=prompt('Type rename, duplicate, or delete','rename');if(action==='rename'){const name=prompt('Project name',p.name);if(name){p.name=name;save()}}
- else if(action==='duplicate'){const dup=M.clone(p);dup.id=M.uid();dup.name+=' copy';database.projects.push(dup);save()}
- else if(action==='delete'&&confirm(`Delete ${p.name}? Export a backup first.`)){database.projects=database.projects.filter(q=>q.id!==id);save()}render()}
 
 function createScene(name,setId){
  const p=project(),source=beat(),original=scene();if(!p)return;
@@ -493,14 +519,14 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
  else if(a==='edit-current-project'){openEditDialog('edit-project',project()?.id)}
  else if(a==='new-project'){openEditDialog('new-project')}
  else if(a==='open-project')openProject(id);else if(a==='home')home();else if(a==='all-scenes'){stopPlayback();ui.libraryFilter='';ui.page='project';ui.showMenu=false;render()}else if(a==='choose-scene')openScene(id);else if(a==='open-context'){const rect=target.getBoundingClientRect();openContext(target.dataset.kind,id,rect.right-210,rect.bottom+4)}else if(a==='close-context'){ui.context=null;render()}else if(a==='context-action'){const c=ui.context;ui.context=null;if(c){if(c.kind==='beat')beatCommand(c.id,target.dataset.command);else manageItem(c.kind,c.id,target.dataset.command)}}
- else if(a==='toggle-menu'){ui.showMenu=!ui.showMenu;render()}else if(a==='toggle-editor-ghosts'){if(ui.ghostMode==='off')ui.ghostMode=ui.previousGhostMode||'adjacent';else{ui.previousGhostMode=ui.ghostMode;ui.ghostMode='off'}render()}else if(a==='toggle-layers'){ui.showLayers=!ui.showLayers;ui.showExportPanel=false;if(ui.showLayers&&window.innerWidth<850)ui.showInspector=false;render()}else if(a==='toggle-inspector'){if(!ui.selection)ui.selection={type:'background'};ui.showInspector=!ui.showInspector;if(ui.showInspector&&window.innerWidth<850)ui.showLayers=false;render()}else if(a==='toggle-pin'){const key=target.dataset.panel==='layers'?'layersPinned':'propertiesPinned';ui.layout[key]=!ui.layout[key];saveLayout();render()}else if(a==='switch-panel-side'){const p=target.dataset.panel==='layers'?'layers':'properties';ui.layout[p+'Side']=ui.layout[p+'Side']==='left'?'right':'left';ui.layout[p+'FloatX']=null;ui.layout[p+'FloatY']=null;saveLayout();render()}else if(a==='reset-layout'){ui.layout=defaultLayout();saveLayout();render()}else if(a==='toggle-timeline'){ui.layout.timelineCollapsed=!ui.layout.timelineCollapsed;saveLayout();render()}else if(a==='toggle-export-panel'){ui.showExportPanel=!ui.showExportPanel;ui.showLayers=false;render()}else if(a==='close-inspector'){ui.showInspector=false;render()}else if(a==='close-dialog'){ui.dialog=null;ui.videoDraft=null;ui.previewDraft=undefined;render()}else if(a==='save-entity-dialog'){saveEntityDialog()}else if(a==='choose-preview-image'){previewInput?.click()}else if(a==='reset-preview-image'){ui.previewDraft='';render()}else if(a==='replace-set-background'){fileInput.click()}else if(a==='clear-set-background'){const st=project()?.sets.find(s=>s.id===ui.dialog?.id);if(st){checkpoint();st.background=null;images.clear();save();render();notice('Floor plan image removed')}}else if(a==='reset-beat-duration'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){checkpoint();delete b.holdMs;ui.dialog=null;save();render()}}else if(a==='save-beat-dialog'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){const name=app.querySelector('#beatEditName').value.trim(),secs=Number(app.querySelector('#beatEditHold').value);if(!name||!Number.isFinite(secs)||secs<.5||secs>30)return notice('Enter a name and duration between 0.5 and 30 seconds');checkpoint();b.name=name;b.holdMs=Math.round(secs*1000);ui.dialog=null;save();render()}}
+ else if(a==='toggle-menu'){ui.showMenu=!ui.showMenu;render()}else if(a==='toggle-editor-ghosts'){if(ui.ghostMode==='off')ui.ghostMode=ui.previousGhostMode||'adjacent';else{ui.previousGhostMode=ui.ghostMode;ui.ghostMode='off'}render()}else if(a==='toggle-layers'){ui.showLayers=!ui.showLayers;ui.showExportPanel=false;if(ui.showLayers&&window.innerWidth<850)ui.showInspector=false;render()}else if(a==='toggle-inspector'){if(!ui.selection)ui.selection={type:'background'};ui.showInspector=!ui.showInspector;if(ui.showInspector&&window.innerWidth<850)ui.showLayers=false;render()}else if(a==='toggle-pin'){const key=target.dataset.panel==='layers'?'layersPinned':'propertiesPinned';ui.layout[key]=!ui.layout[key];saveLayout();render()}else if(a==='switch-panel-side'){const p=target.dataset.panel==='layers'?'layers':'properties';ui.layout[p+'Side']=ui.layout[p+'Side']==='left'?'right':'left';ui.layout[p+'FloatX']=null;ui.layout[p+'FloatY']=null;saveLayout();render()}else if(a==='reset-layout'){ui.layout=defaultLayout();saveLayout();render()}else if(a==='toggle-timeline'){ui.layout.timelineCollapsed=!ui.layout.timelineCollapsed;saveLayout();render()}else if(a==='toggle-export-panel'){ui.showExportPanel=!ui.showExportPanel;ui.showLayers=false;render()}else if(a==='close-inspector'){ui.showInspector=false;render()}else if(a==='close-dialog'){ui.dialog=null;ui.videoDraft=null;ui.previewDraft=undefined;render()}else if(a==='save-entity-dialog'){saveEntityDialog()}else if(a==='confirm-delete'){applyConfirmedDelete()}else if(a==='choose-preview-image'){previewInput?.click()}else if(a==='reset-preview-image'){ui.previewDraft='';render()}else if(a==='replace-set-background'){fileInput.click()}else if(a==='clear-set-background'){const st=project()?.sets.find(s=>s.id===ui.dialog?.id);if(st){checkpoint();st.background=null;images.clear();save();render();notice('Floor plan image removed')}}else if(a==='reset-beat-duration'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){checkpoint();delete b.holdMs;ui.dialog=null;save();render()}}else if(a==='save-beat-dialog'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){const name=app.querySelector('#beatEditName').value.trim(),secs=Number(app.querySelector('#beatEditHold').value);if(!name||!Number.isFinite(secs)||secs<.5||secs>30)return notice('Enter a name and duration between 0.5 and 30 seconds');checkpoint();b.name=name;b.holdMs=Math.round(secs*1000);ui.dialog=null;save();render()}}
  else if(a==='undo')undoAction();else if(a==='redo')redoAction();else if(a==='tool'){ui.tool=target.dataset.tool||'select';render()}else if(a==='toggle-equipment'){ui.tool=ui.tool==='equipment'?'select':'equipment';render()}else if(a==='place-equipment'){ui.tool='equip:'+target.dataset.shape;render()}
  else if(a==='choose-set'){checkpoint();scene().setId=id;ui.showMenu=false;ui.selection=null;save();render()}
  else if(a==='new-scene')openEditDialog('new-scene');else if(a==='new-set')openEditDialog('new-set');else if(a==='choose-beat')chooseBeat(id);else if(a==='add-beat')addBeat();
  else if(a==='previous-beat'||a==='next-beat'){const list=scene().beats,idx=list.findIndex(b=>b.id===ui.beatId),step=a==='next-beat'?1:-1;chooseBeat(list[clamp(idx+step,0,list.length-1)].id)}
  else if(a==='select-object'){ui.selection={type:target.dataset.kind,id};ui.showLayers=false;ui.showExportPanel=false;ui.showInspector=true;render()}
  else if(a==='rename-beat'){ui.dialog={kind:'edit-beat',id:ui.beatId};render()}
- else if(a==='delete-beat'){if(scene().beats.length===1)return notice('A scene needs at least one beat');if(confirm('Delete this beat?')){checkpoint();const list=scene().beats,i=list.findIndex(b=>b.id===ui.beatId);list.splice(i,1);ui.beatId=list[Math.max(0,i-1)].id;ui.selection=null;save();render()}}
+ else if(a==='delete-beat'){if(scene().beats.length===1)return notice('A scene needs at least one beat');ui.dialog={kind:'confirm-delete',targetKind:'beat',id:ui.beatId,name:beat()?.name||'Beat'};render()}
  else if(a==='quick-color'){edit('itemColor',target.dataset.color)}else if(a==='delete-selection')removeSelection();
  else if(a==='import-bg')fileInput.click();else if(a==='import-project')projectInput.click();else if(a==='select-bg'){ui.selection={type:'background'};ui.showInspector=true;ui.showMenu=false;render()}
  else if(a==='clear-bg'){checkpoint();set().background=null;images.clear();save();render()}else if(a==='export-image')await savePNG();else if(a==='export-zip')await saveZIP();else if(a==='export-video-dialog'){ui.showExportPanel=false;ui.videoDraft={...playbackOptions()};ui.dialog={kind:'video'};render()}else if(a==='confirm-video-export'){const c=ui.videoDraft||playbackOptions();project().playback=P.settings({...playbackOptions(),speed:Number(c.speed),holdMs:Number(c.holdMs),mode:c.mode});ui.videoDraft=null;ui.dialog=null;save();render();await saveVideo()}else if(a==='export-video')await saveVideo();else if(a==='save-project'){clearTimeout(saveTimer);await writeDB();await queuePreviews(project());notice('Project saved locally')}else if(a==='backup')backup()}
@@ -587,7 +613,7 @@ app.addEventListener('input',e=>{
 });
 app.addEventListener('change',e=>{if(e.target?.id==='librarySort'){ui.librarySort=e.target.value;render();return}if(e.target.name){const v=e.target.type==='checkbox'?e.target.checked:e.target.value;if(e.target.name==='playbackSpeed')return setPlaybackOption('speed',v);if(e.target.name==='playbackHold')return setPlaybackOption('holdMs',v);if(e.target.name==='playbackMode')return setPlaybackOption('mode',v);if(['videoSpeed','videoHold','videoMode'].includes(e.target.name)){ui.videoDraft={...(ui.videoDraft||playbackOptions()),[e.target.name==='videoSpeed'?'speed':e.target.name==='videoHold'?'holdMs':'mode']:e.target.name==='videoMode'?v:Number(v)};return}edit(e.target.name,v)}});
 app.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('.project-tile[data-id]'))openProject(e.target.dataset.id);else if(e.key==='Enter'&&e.target.id==='entityEditName'){e.preventDefault();saveEntityDialog()}});
-window.addEventListener('keydown',e=>{if(ui.page==='manual'){if(e.key==='Escape'){ui.page=ui.manualReturn||'workspace';render()}return}if(e.target.closest?.('input,select,textarea'))return;if(e.code==='Space'&&scene()){e.preventDefault();togglePlayback();return}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redoAction():undoAction()}else if(['Delete','Backspace'].includes(e.key)&&ui.selection&&ui.selection.type!=='background'){e.preventDefault();removeSelection()}else if(e.key==='Escape'){ui.selection=null;ui.showInspector=false;ui.tool='select';render()}else if(e.key==='ArrowRight'&&scene()){const i=scene().beats.findIndex(b=>b.id===ui.beatId);chooseBeat(scene().beats[Math.min(scene().beats.length-1,i+1)].id)}else if(e.key==='ArrowLeft'&&scene()){const i=scene().beats.findIndex(b=>b.id===ui.beatId);chooseBeat(scene().beats[Math.max(0,i-1)].id)}});
+window.addEventListener('keydown',e=>{if(ui.page==='manual'){if(e.key==='Escape'){ui.page=ui.manualReturn||'workspace';render()}return}if(ui.dialog&&e.key==='Escape'){ui.dialog=null;ui.previewDraft=undefined;render();return}if(ui.dialog)return;if(e.target.closest?.('input,select,textarea'))return;if(e.code==='Space'&&scene()){e.preventDefault();togglePlayback();return}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redoAction():undoAction()}else if(['Delete','Backspace'].includes(e.key)&&ui.selection&&ui.selection.type!=='background'){e.preventDefault();removeSelection()}else if(e.key==='Escape'){ui.selection=null;ui.showInspector=false;ui.tool='select';render()}else if(e.key==='ArrowRight'&&scene()){const i=scene().beats.findIndex(b=>b.id===ui.beatId);chooseBeat(scene().beats[Math.min(scene().beats.length-1,i+1)].id)}else if(e.key==='ArrowLeft'&&scene()){const i=scene().beats.findIndex(b=>b.id===ui.beatId);chooseBeat(scene().beats[Math.max(0,i-1)].id)}});
 fileInput.addEventListener('change',async()=>{if(fileInput.files[0])await importBackground(fileInput.files[0]);fileInput.value=''});
 projectInput.addEventListener('change',async()=>{if(projectInput.files[0])await importProject(projectInput.files[0]);projectInput.value=''});
 previewInput?.addEventListener('change',async()=>{
