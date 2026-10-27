@@ -28,7 +28,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
       - uses: actions/upload-artifact@v4
         with:
-          name: Block4Film-1.3.2-macOS-UNSIGNED-TEST
+          name: Block4Film-1.4.0-macOS-UNSIGNED-TEST
           path: |
             dist/*.dmg
             dist/*.zip
@@ -53,13 +53,17 @@ jobs:
         run: |
           npm run test:model
           npm run mobile:android
-      - name: Build Android debug APK for testing
+      - name: Build Android tablet test APK
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - name: Give the tablet APK a recognizable filename
+        run: |
+          mkdir -p android-out
+          cp android/app/build/outputs/apk/debug/app-debug.apk android-out/Block4Film-1.4.0-Android-Tablet-Test.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: Block4Film-1.3.2-Android-DEBUG-TEST-APK
-          path: android/app/build/outputs/apk/debug/*.apk
+          name: Block4Film-1.4.0-Android-Tablet-APK
+          path: android-out/*.apk
           if-no-files-found: error
           retention-days: 14
   ios:
@@ -83,10 +87,10 @@ jobs:
             CODE_SIGNING_ALLOWED=NO build
           APP_DIR="$RUNNER_TEMP/Block4Film-iOS/Build/Products/Debug-iphonesimulator/App.app"
           test -d "$APP_DIR"
-          ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$RUNNER_TEMP/Block4Film-1.3.2-iOS-Simulator.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$RUNNER_TEMP/Block4Film-1.4.0-iOS-Simulator.zip"
       - uses: actions/upload-artifact@v4
         with:
-          name: Block4Film-1.3.2-iOS-SIMULATOR-ONLY
-          path: ${{ runner.temp }}/Block4Film-1.3.2-iOS-Simulator.zip
+          name: Block4Film-1.4.0-iOS-SIMULATOR-ONLY
+          path: ${{ runner.temp }}/Block4Film-1.4.0-iOS-Simulator.zip
           if-no-files-found: error
           retention-days: 14

@@ -55,7 +55,7 @@ jobs:
       - name: Publish Windows release and retire cross-platform beta
         env:
           GH_TOKEN: ${{ github.token }}
-          WINDOWS_TAG: v1.3.2-tablet-hotfix-beta.1
+          WINDOWS_TAG: v1.4.0
         run: |
           set -euo pipefail
           ls -lh release-assets/*.exe
@@ -64,8 +64,7 @@ jobs:
           else
             gh release create "$WINDOWS_TAG" release-assets/*.exe \
               --target "$GITHUB_SHA" \
-              --title "Block4Film 1.3.2 - Tablet Import & Layout Hotfix Beta" \
-              --notes "Block4Film 1.3.2 tablet hotfix beta: native Android/iOS import of .blockascene project backups, corrected Properties/keyframe HTML and tablet panel layout, smaller destination direction ring without center spoke. Includes all v1.3.1 keyframe movement improvements. Stable 1.3.0 remains available; back up projects before updating." \
-              --prerelease
+              --title "Block4Film 1.4.0 - Scene Planning Release" \
+              --notes "Block4Film 1.4.0: preserve imported floor-plan aspect ratios with adjustable scale, wall/window menu, direct resize handles for furniture/walls/windows/doors, adjustable lens-constrained camera cone reach, modular lights with Standard/Softbox/Spotlight and Kelvin/Color modes, and cropped Block4Film Android launcher icon. Windows release; Android APK remains test-signed until a persistent signing key is configured. Existing stable 1.3.0 remains available."
           fi
           gh release view "$WINDOWS_TAG" --json assets --jq '.assets[].name' | grep -qE '\.exe$'
