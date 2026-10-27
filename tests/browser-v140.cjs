@@ -5,9 +5,9 @@ const {chromium}=require('playwright'),sharp=require('sharp'),M=require('../app/
  const root=path.resolve(__dirname,'..'),out=path.join(root,'browser-results');await fs.mkdir(out,{recursive:true});
  const project=M.createProject('Tablet acceptance fixture'),scene=project.scenes[0],set=project.sets[0];
  set.background=null;set.backgroundScale=2;
- const actor=scene.actors[0].id,actorBefore=JSON.stringify(scene.beats[0].positions);
+ const actor=scene.actors[0].id;
  scene.beats[0].positions[actor].motion={kind:'walk',endX:650,endY:330,endRotation:45,pathType:'smooth',keys:[{id:'key',t:.5,x:430,y:260,rotation:10}]};
- const expectedPositions=JSON.stringify(scene.beats[0].positions);
+ const expectedPositions=JSON.stringify(M.migrate(project).scenes[0].beats[0].positions);
  const server=http.createServer(async(req,res)=>{
   try{
    const pathname=decodeURIComponent(new URL(req.url,'http://localhost').pathname);

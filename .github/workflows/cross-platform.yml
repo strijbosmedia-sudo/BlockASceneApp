@@ -71,6 +71,20 @@ jobs:
           npm run test:model
           npm run mobile:android
           node tests/android-assets-v140.cjs
+      - name: Verify release builds require persistent signing credentials
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PATH: ''
+          ANDROID_KEYSTORE_PASSWORD: ''
+          ANDROID_KEY_ALIAS: ''
+          ANDROID_KEY_PASSWORD: ''
+        run: |
+          chmod +x gradlew
+          if ./gradlew assembleRelease --no-daemon > "$RUNNER_TEMP/missing-signing.log" 2>&1; then
+            echo "::error::Unsigned release unexpectedly succeeded"
+            exit 1
+          fi
+          grep -F 'Release signing requires' "$RUNNER_TEMP/missing-signing.log"
       - name: Build Android tablet test APK
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
