@@ -250,9 +250,18 @@ function inspector(){
   if(['actor','camera'].includes(sel.type))content+=identityNumberField(sel,d);
   if(state)content+=`<div class="two-fields">${prop('X','x',Math.round(state.x),'number')}${prop('Y','y',Math.round(state.y),'number')}</div>${prop('Direction (degrees)','rotation',Math.round(M.normalizeAngle(state.rotation)),'number','step="1"')}${sel.type==='equipment'?check('visible','Visible in this beat',state.visible!==false):''}`;
   if(sel.type==='actor'||sel.type==='camera')content+=beatVisibilityGrid(sel);
-  if(sel.type==='actor'&&state){content+=`${option('Movement within beat','motionKind',[['static','No movement'],['walk','Move actor']],state.motion?.kind||'static')}${state.motion?`<p class="help">Drag the destination marker to set the move.</p><div class="two-fields">${prop('End X','endX',Math.round(state.motion.endX),'number')}${prop('End Y','endY',Math.round(state.motion.endY),'number')}</div>${prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number')}`:''}`;}
-   if(sel.type==='camera'&&state){content+=`<div class="divider"></div><div class="two-fields">${prop('Lens (mm)','lens',state.lens,'number','min="8" max="600"')}${prop('Sensor (mm)','sensor',state.sensor,'number','min="5" max="70"')}</div>${option('Movement within beat','motionKind',[['static','Static'],['push','Push in / Pull back'],['slide','Slide left / right'],['track','Dolly / Track']],state.motion?.kind||'static')}`;
-   if(state.motion)content+=`<p class="help">Solid line from Pos 1 to Pos 2. Drag the end marker to define the camera move.</p><div class="two-fields">${prop('Pos 2 X','endX',Math.round(state.motion.endX),'number')}${prop('Pos 2 Y','endY',Math.round(state.motion.endY),'number')}</div>${prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number')}`;
+  if(sel.type==='actor'&&state){content+=`${option('Movement within beat','motionKind',[['static','No movement'],['walk','Move actor'],['turn','Turn in place']],state.motion?.kind||'static')}${state.motion?`<p class="help">Drag the destination and rotate its direction handle to turn while moving.</p>${state.motion.kind==='turn'?'':`<div class="two-fields">${prop('End X','endX',Math.round(state.motion.endX),'number')}${prop('End Y','endY',Math.round(state.motion.endY),'number')}</div>`}${prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number')}`:''}`;}
+   if(sel.type==='camera'&&state){content+=`<div class="divider"></div><div class="two-fields">${prop('Lens (mm)','lens',state.lens,'number','min="8" max="600"')}${prop('Sensor (mm)','sensor',state.sensor,'number','min="5" max="70"')}</div>${option('Movement within beat','motionKind',[['static','Static'],['pan','Pan in place'],['push','Push in / Pull back'],['slide','Slide left / right'],['track','Dolly / Track']],state.motion?.kind||'static')}`;
+   if(state.motion)content+=`<p class="help">Drag the destination and direction handle to rotate while moving.</p>${state.motion.kind==='pan'?'':`<div class="two-fields">${prop('Pos 2 X','endX',Math.round(state.motion.endX),'number')}${prop('Pos 2 Y','endY',Math.round(state.motion.endY),'number')}</div>`}${prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number')}`;
+  }
+  if(state?.motion&&['actor','camera'].includes(sel.type)){
+   const motion=state.motion,keys=[...(motion.keys||[])].sort((a,b)=>a.t-b.t);
+   content+=`<div class="divider"></div>${option('Motion path','motionPath',[['linear','Straight segments'],['smooth','Smooth curves']],motion.pathType||'linear')}
+    <div class="keyframe-head"><strong>Movement keyframes</strong>${btn('add-motion-keyframe','+','Add keyframe','small')}</div>
+    <p class="help">Drag keyframe diamonds on the canvas to bend the path. Adjust time, position and direction here.</p>
+    ${keys.map((k,i)=>`<div class="keyframe-row"><div class="keyframe-head"><b>Keyframe ${i+1}</b><button data-action="remove-motion-keyframe" data-id="${esc(k.id)}" aria-label="Remove keyframe ${i+1}">×</button></div>
+      <div class="two-fields">${prop('Time (%)','keyframe:'+k.id+':t',Math.round(k.t*100),'number','min="1" max="99" step="1"')}${prop('Direction (°)','keyframe:'+k.id+':rotation',Math.round(M.normalizeAngle(k.rotation)),'number','step="1"')}</div>
+      <div class="two-fields">${prop('X','keyframe:'+k.id+':x',Math.round(k.x),'number')}${prop('Y','keyframe:'+k.id+':y',Math.round(k.y),'number')}</div></div>`).join('')}</div>`;
   }
   if(!state&&(sel.type==='actor'||sel.type==='camera'))content+=`<p class="help">This object has no saved position in this beat. Tick its beat checkbox to place it using its nearest saved state.</p>`;
   if(sel.type==='equipment'){content+=`${check('lockToSet','Lock position across beats',!!d.lockToSet)}<p class="help">Simple diagram symbol. Rename it to the real item on set.</p>`}
@@ -494,9 +503,27 @@ function edit(name,value){const sel=ui.selection,d=detailsOf(sel),o=stateOf(sel)
  else if(name==='itemColor'&&d){const error=sel.type==='equipment'?(d.color=value,null):M.recolor(p,d.id,value);if(error){notice(error);undo.pop();render();return}}
  else if(name==='setName')loc.name=value;else if(name==='opacity')loc.opacity=Number(value)/100;else if(name==='darken')loc.darken=value;
  else if(name==='lockToSet'&&d){if(value){d.fixedState=M.clone(o||M.defaultEquipmentState());d.lockToSet=true}else{for(const b of scene().beats)b.equipment[d.id]=M.clone(d.fixedState);d.lockToSet=false}}
- else if(name==='motionKind'&&['camera','actor'].includes(sel?.type)&&o){if(value==='static')o.motion=null;else{const angle=rad(o.rotation||0),dist=145;o.motion={kind:value,endX:o.motion?.endX??o.x+dist*Math.cos(angle),endY:o.motion?.endY??o.y+dist*Math.sin(angle),endRotation:o.motion?.endRotation??o.rotation}}}
- else if(['endX','endY','endRotation'].includes(name)&&o?.motion)o.motion[name]=Number(value);
- else if(o&&['x','y','rotation','lens','sensor'].includes(name)){const before={...o};o[name]=Number(value);if(name==='x'&&o.motion)o.motion.endX+=o.x-before.x;if(name==='y'&&o.motion)o.motion.endY+=o.y-before.y}
+ else if(name==='motionKind'&&['camera','actor'].includes(sel?.type)&&o){
+  if(value==='static')o.motion=null;
+  else{
+   const turnOnly=['pan','turn'].includes(value),old=o.motion,angle=rad(o.rotation||0),dist=145;
+   o.motion={kind:value,pathType:old?.pathType||'linear',keys:turnOnly?[]:M.clone(old?.keys||[]),
+    endX:turnOnly?o.x:old?.endX??o.x+dist*Math.cos(angle),
+    endY:turnOnly?o.y:old?.endY??o.y+dist*Math.sin(angle),
+    endRotation:old?.endRotation??o.rotation};
+  }
+ }
+ else if(name==='motionPath'&&o?.motion)o.motion.pathType=value==='smooth'?'smooth':'linear';
+ else if(name.startsWith('keyframe:')&&o?.motion){
+  const [,id,field]=name.split(':'),key=o.motion.keys?.find(k=>k.id===id);
+  if(key&&['t','x','y','rotation'].includes(field)){
+   let n=Number(value);if(!Number.isFinite(n)){undo.pop();return}
+   if(field==='t')n=clamp(n/100,.01,.99);
+   key[field]=n;o.motion.keys.sort((a,b)=>a.t-b.t);
+  }
+ }
+ else if(['endX','endY','endRotation'].includes(name)&&o?.motion){o.motion[name]=Number(value);if(['pan','turn'].includes(o.motion.kind)){o.motion.endX=o.x;o.motion.endY=o.y}}
+ else if(o&&['x','y','rotation','lens','sensor'].includes(name)){o[name]=Number(value);if(o.motion&&['pan','turn'].includes(o.motion.kind)){o.motion.endX=o.x;o.motion.endY=o.y}}
  else if(name==='visible'&&o)o.visible=value;
  save();setTimeout(render,0)}
 
@@ -563,6 +590,18 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
  else if(a==='choose-set'){checkpoint();scene().setId=id;ui.showMenu=false;ui.selection=null;save();render()}
  else if(a==='new-scene')openEditDialog('new-scene');else if(a==='new-set')openEditDialog('new-set');else if(a==='choose-beat')chooseBeat(id);else if(a==='add-beat')addBeat();
  else if(a==='previous-beat'||a==='next-beat'){const list=scene().beats,idx=list.findIndex(b=>b.id===ui.beatId),step=a==='next-beat'?1:-1;chooseBeat(list[clamp(idx+step,0,list.length-1)].id)}
+ else if(a==='add-motion-keyframe'){
+  const s=stateOf();if(s?.motion&&!['pan','turn'].includes(s.motion.kind)){
+   checkpoint();const keys=s.motion.keys||[],times=[0,...keys.map(k=>k.t).sort((a,b)=>a-b),1];let best=0,t=.5;
+   for(let i=1;i<times.length;i++)if(times[i]-times[i-1]>best){best=times[i]-times[i-1];t=(times[i]+times[i-1])/2}
+   const point=P.animateCameraPosition(s,t);
+   s.motion.keys=[...keys,{id:M.uid(),t,x:point.x,y:point.y,rotation:point.rotation}].sort((a,b)=>a.t-b.t);
+   s.motion.pathType='smooth';save();render();
+  }else notice('Choose a positional move to add keyframes.');
+ }
+ else if(a==='remove-motion-keyframe'){
+  const s=stateOf();if(s?.motion?.keys){checkpoint();s.motion.keys=s.motion.keys.filter(k=>k.id!==id);save();render()}
+ }
  else if(a==='select-object'){ui.selection={type:target.dataset.kind,id};ui.showLayers=false;ui.showExportPanel=false;ui.showInspector=true;render()}
  else if(a==='rename-beat'){ui.dialog={kind:'edit-beat',id:ui.beatId};render()}
  else if(a==='delete-beat'){if(scene().beats.length===1)return notice('A scene needs at least one beat');ui.dialog={kind:'confirm-delete',targetKind:'beat',id:ui.beatId,name:beat()?.name||'Beat'};render()}
