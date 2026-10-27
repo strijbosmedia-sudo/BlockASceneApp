@@ -15,7 +15,7 @@ const restored=M.migrate(proj);
 assert.equal(restored.scenes[0].beats[0].holdMs,5000);
 assert.equal(restored.scenes[0].beats[0].positions[aid].motion.endX,800);
 const events={},app={innerHTML:'',addEventListener(name,fn){events[name]=fn}};
-const document={getElementById(id){return id==='app'?app:id==='backgroundFile'||id==='projectFile'?{addEventListener(){}}:null}};
+const document={getElementById(id){return id==='app'?app:id==='backgroundFile'||id==='projectFile'?{addEventListener(){}}:null},querySelector(){return null},querySelectorAll(){return []}};
 const localStorage={getItem(){return null},setItem(){}};
 const sandbox={window:{B4Model:M,B4Playback:P,B4Manual:[],addEventListener(){},innerWidth:1400},document,performance:{now:()=>0},indexedDB:{open(){throw Error('simulated offline')}},localStorage,console,setTimeout(){return 1},clearTimeout(){},innerWidth:1400,Date,Math};
 sandbox.globalThis=sandbox;
