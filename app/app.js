@@ -6,7 +6,7 @@ const W=1100,H=700,clamp=(x,min,max)=>Math.max(min,Math.min(max,x)),rad=d=>d*Mat
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safe=v=>String(v||'scene').replace(/[^a-z0-9_-]+/gi,'-').slice(0,50)||'scene';
 let database={version:2,projects:[]};
-let ui={page:'editor',manualTab:'start',projectId:null,sceneId:null,beatId:null,selection:null,tool:'select',showMenu:false,showInspector:false,showLayers:false,showExportPanel:false,context:null,dialog:null,manualScroll:{},manualReturn:'workspace',layout:{layersPinned:false,propertiesPinned:false,layersWidth:290,propertiesWidth:300,timelineCollapsed:false},previousGhostMode:'adjacent',showCones:true,showPaths:true,showCameraMoves:true,ghostMode:'adjacent',view:{scale:.8,x:0,y:0},autoFit:true};
+let ui={page:'editor',manualTab:'start',projectId:null,sceneId:null,beatId:null,selection:null,tool:'select',showMenu:false,showInspector:false,showLayers:false,showExportPanel:false,context:null,dialog:null,manualScroll:{},manualReturn:'workspace',layout:{layersPinned:false,propertiesPinned:false,layersSide:'right',propertiesSide:'right',layersWidth:290,propertiesWidth:300,layersFloatX:null,layersFloatY:null,propertiesFloatX:null,propertiesFloatY:null,layersFloatHeight:490,propertiesFloatHeight:510,timelineCollapsed:false},previousGhostMode:'adjacent',showCones:true,showPaths:true,showCameraMoves:true,ghostMode:'adjacent',view:{scale:.8,x:0,y:0},autoFit:true};
 let canvas,wrap,ctx,drag=null,pointers=new Map(),pinch=null,saveTimer,undo=[],redo=[],images=new Map();
 let playback={playing:false,elapsedMs:0,startedAt:0,startIndex:0,raf:0,frame:null,exporting:false};
 const playbackOptions=()=>P.settings(project()?.playback);
@@ -24,7 +24,28 @@ function notice(msg){const el=document.getElementById('toast');if(!el)return;el.
 function openStore(){return new Promise((resolve,reject)=>{const r=indexedDB.open('BlockaScene-v1',1);r.onupgradeneeded=()=>r.result.createObjectStore('state');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
 async function loadDB(){try{const db=await openStore();const result=await new Promise((resolve,reject)=>{const tr=db.transaction('state','readonly');const req=tr.objectStore('state').get('database');req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error)});db.close();return result}catch(e){console.warn('Could not read IndexedDB',e);try{return JSON.parse(localStorage.getItem('blockascene-backup')||'null')}catch{return null}}}
 async function writeDB(){try{const db=await openStore();await new Promise((resolve,reject)=>{const tr=db.transaction('state','readwrite');tr.objectStore('state').put(database,'database');tr.oncomplete=resolve;tr.onerror=()=>reject(tr.error)});db.close()}catch(e){try{localStorage.setItem('blockascene-backup',JSON.stringify(database))}catch{notice('Storage is full. Export your project backup now.')}}}
+function defaultLayout(){return {layersPinned:false,propertiesPinned:false,layersSide:'right',propertiesSide:'right',layersWidth:290,propertiesWidth:300,layersFloatX:null,layersFloatY:null,propertiesFloatX:null,propertiesFloatY:null,layersFloatHeight:490,propertiesFloatHeight:510,timelineCollapsed:false}}
 function saveLayout(){try{localStorage.setItem('Block4Film-v11-layout',JSON.stringify(ui.layout))}catch{}}
+function panelMeta(name){
+ const p=name==='layers'?'layers':'properties',side=ui.layout[p+'Side']==='left'?'left':'right',pinned=!!ui.layout[p+'Pinned'];
+ const width=clamp(Number(ui.layout[p+'Width'])||290,220,470);
+ const height=clamp(Number(ui.layout[p+'FloatHeight'])||490,230,760);
+ const x=ui.layout[p+'FloatX'],y=ui.layout[p+'FloatY'],moved=Number.isFinite(x)&&Number.isFinite(y);
+ return {p,side,pinned,width,height,x,y,moved};
+}
+function panelStyle(name){
+ const m=panelMeta(name),s=['width:'+m.width+'px'];
+ if(!m.pinned){s.push('height:'+m.height+'px');if(m.moved){s.push('left:'+m.x+'px','top:'+m.y+'px','right:auto','bottom:auto')}}
+ return s.join(';');
+}
+function panelButtons(name){
+ const m=panelMeta(name),next=m.side==='right'?'left':'right';
+ return `<div class="panel-head-buttons">${btn('switch-panel-side',m.side==='right'?'⇤':'⇥','Move '+name+' to '+next,'icon-only','data-panel="'+name+'"')}${btn('toggle-pin',m.pinned?'▣':'♧',m.pinned?'Unpin '+name:'Pin '+name,'icon-only','data-panel="'+name+'"')}${btn(name==='layers'?'toggle-layers':'close-inspector','×','Close '+name,'icon-only')}</div>`;
+}
+function panelGrip(name){
+ const m=panelMeta(name);
+ return `<div class="panel-resizer ${m.pinned?'is-docked':'is-floating'}" data-resize-panel="${name}" data-side="${m.side}" title="Resize ${name} panel" aria-label="Resize ${name} panel"></div>`;
+}
 function save(){if(project())project().updatedAt=Date.now();clearTimeout(saveTimer);saveTimer=setTimeout(writeDB,350)}
 function checkpoint(){if(!project())return;undo.push(M.clone(project()));if(undo.length>60)undo.shift();redo=[]}
 function replaceProject(snapshot){const i=database.projects.findIndex(p=>p.id===ui.projectId);if(i>=0)database.projects[i]=snapshot;ensureActive();render();save()}
@@ -74,7 +95,13 @@ function beatVisibilityGrid(sel){
  const sc=scene(),field=sel.type==='actor'?'positions':'cameras';
  return `<section class="beat-visibility"><div class="beat-visibility-title">Visible in beats <small>${sc.beats.filter(b=>b[field][sel.id]?.visible!==false&&b[field][sel.id]).length} / ${sc.beats.length}</small></div><div class="beat-visibility-list">${sc.beats.map((b,i)=>`<label class="beat-visibility-row ${b.id===ui.beatId?'current':''}"><input type="checkbox" name="beatVisible:${esc(b.id)}" ${b[field][sel.id]&&b[field][sel.id].visible!==false?'checked':''}/><span class="beat-visibility-number">${String(i+1).padStart(2,'0')}</span><span class="beat-visibility-name">${esc(b.name)}</span>${b.id===ui.beatId?'<em>NOW</em>':''}</label>`).join('')}</div><p class="help">Choose exactly which beats show this ${sel.type}. New beats appear here automatically.</p></section>`;
 }
-function inspector(){if(!ui.showInspector&&!ui.layout.propertiesPinned)return '';if(!ui.selection){if(!ui.layout.propertiesPinned)return '';return `<aside class="inspector docked" data-panel="properties" style="width:${ui.layout.propertiesWidth}px"><div class="inspector-head">OBJECT PROPERTIES</div><div class="inspect-body"><p class="help">Select an object to edit its properties.</p></div><div class="panel-resizer" data-resize-panel="properties"></div></aside>`}const sel=ui.selection,d=detailsOf(sel),state=stateOf(sel);let content='';
+function inspector(){
+ if(!ui.showInspector)return '';
+ if(!ui.selection){
+  const m=panelMeta('properties');
+  return `<aside class="inspector ${m.pinned?'docked':'panel-float'}" data-panel="properties" data-side="${m.side}" data-moved="${m.moved}" style="${panelStyle('properties')}"><div class="inspector-head panel-header" data-drag-panel="properties"><span>OBJECT PROPERTIES</span>${panelButtons('properties')}</div><div class="inspect-body"><p class="help">Select an object to edit its properties.</p></div>${panelGrip('properties')}</aside>`;
+ }
+ const sel=ui.selection,d=detailsOf(sel),state=stateOf(sel);let content='';
  if(d&&(sel.type==='actor'||sel.type==='camera'||sel.type==='equipment')){
   content=`<div class="inspector-title"><span class="object-mark" style="background:${d.color||'#C8CBD1'}"></span><div><small>${sel.type==='actor'?'ACTOR '+M.label(d.number):sel.type==='camera'?'CAMERA '+d.number:d.type.toUpperCase()}</small><h3>${esc(d.name)}</h3></div></div>${prop('Name','itemName',d.name)}<div class="field"><span>Object color</span>${colors(d.color)}${prop('Custom HEX','itemColor',d.color,'color')}</div>${sel.type==='actor'||sel.type==='camera'?option('Symbol outline','itemOutline',[['white','White'],['black','Black']],d.outline||'white'):''}`;
   if(state)content+=`<div class="two-fields">${prop('X','x',Math.round(state.x),'number')}${prop('Y','y',Math.round(state.y),'number')}</div>${prop('Direction (degrees)','rotation',Math.round(M.normalizeAngle(state.rotation)),'number','step="1"')}${sel.type==='equipment'?check('visible','Visible in this beat',state.visible!==false):''}`;
@@ -88,8 +115,8 @@ function inspector(){if(!ui.showInspector&&!ui.layout.propertiesPinned)return ''
   content+=`${btn('delete-selection','⌫','Delete object','danger wide')}`;
  }else if(sel.type==='setobj'&&state){content=`<h3>Set object</h3>${prop('Name','itemName',state.name||'')}${prop('X','x',state.x,'number')}${prop('Y','y',state.y,'number')}${prop('Rotation','rotation',state.rotation||0,'number')}${btn('delete-selection','⌫','Delete object','danger wide')}`}
  else if(sel.type==='background'){content=`<h3>Floor plan</h3>${prop('Set name','setName',set().name)}${prop('Opacity (%)','opacity',Math.round((set().opacity??.8)*100),'range','min="5" max="100"')}${check('darken','Darken imported image',set().darken!==false)}${btn('import-bg','▧','Replace floor plan','wide')}${btn('clear-bg','×','Remove image','danger wide')}`}
- return `<aside class="inspector ${ui.layout.propertiesPinned?'docked':''}" data-panel="properties" style="width:${ui.layout.propertiesWidth}px"><div class="inspector-head"><span>OBJECT PROPERTIES</span><div class="panel-head-buttons">${btn('toggle-pin',ui.layout.propertiesPinned?'▣':'♧',ui.layout.propertiesPinned?'Unpin properties':'Pin properties','icon-only','data-panel="properties"')}${btn('close-inspector','×','','icon-only')}</div></div><div class="inspect-body">${content}</div>${ui.layout.propertiesPinned?'<div class="panel-resizer" data-resize-panel="properties" title="Drag to resize"></div>':''}</aside>`}
-function layers(){if(!ui.showLayers)return '';const objects=[...scene().actors.map(o=>({...o,kind:'actor'})),...scene().cameras.map(o=>({...o,kind:'camera'})),...scene().equipment.map(o=>({...o,kind:'equipment'}))];return `<aside class="layers-pop side-pop ${ui.layout.layersPinned?'docked':''}" data-panel="layers" style="width:${ui.layout.layersWidth}px" aria-label="Canvas layers"><div class="panel-head"><strong>Layers & visibility</strong><div class="panel-head-buttons">${btn('toggle-pin',ui.layout.layersPinned?'▣':'♧',ui.layout.layersPinned?'Unpin layers':'Pin layers','icon-only','data-panel="layers"')}${btn('toggle-layers','×','','icon-only')}</div></div>${check('showCones','Camera field of view',ui.showCones)}${check('showPaths','Dotted beat-to-beat paths',ui.showPaths)}${check('showCameraMoves','Solid camera moves',ui.showCameraMoves)}${option('Other beat positions','ghostMode',[['off','Off'],['adjacent','Previous + Next'],['all','All beats']],ui.ghostMode)}<div class="object-roster"><strong>SCENE OBJECTS</strong>${objects.map(o=>{const state=stateOf({type:o.kind,id:o.id});return `<button class="roster-item" data-action="select-object" data-id="${o.id}" data-kind="${o.kind}"><span class="roster-dot" style="background:${o.color}"></span>${esc(o.kind==='actor'?M.label(o.number)+' · '+o.name:o.kind==='camera'?'Cam '+o.number+' · '+o.name:o.name)}${state?.visible===false||!state?'<em>HIDDEN</em>':''}</button>`}).join('')}</div>${ui.layout.layersPinned?'<div class="panel-resizer" data-resize-panel="layers" title="Drag to resize"></div>':''}</aside>`}
+ const m=panelMeta('properties');return `<aside class="inspector ${m.pinned?'docked':'panel-float'}" data-panel="properties" data-side="${m.side}" data-moved="${m.moved}" style="${panelStyle('properties')}"><div class="inspector-head panel-header" data-drag-panel="properties"><span>OBJECT PROPERTIES</span>${panelButtons('properties')}</div><div class="inspect-body">${content}</div>${panelGrip('properties')}</aside>`}
+function layers(){if(!ui.showLayers)return '';const objects=[...scene().actors.map(o=>({...o,kind:'actor'})),...scene().cameras.map(o=>({...o,kind:'camera'})),...scene().equipment.map(o=>({...o,kind:'equipment'}))];const m=panelMeta('layers');return `<aside class="layers-pop side-pop ${m.pinned?'docked':'panel-float'}" data-panel="layers" data-side="${m.side}" data-moved="${m.moved}" style="${panelStyle('layers')}" aria-label="Canvas layers"><div class="panel-head panel-header" data-drag-panel="layers"><strong>Layers & visibility</strong>${panelButtons('layers')}</div><div class="layers-body">${check('showCones','Camera field of view',ui.showCones)}${check('showPaths','Dotted beat-to-beat paths',ui.showPaths)}${check('showCameraMoves','Solid camera moves',ui.showCameraMoves)}${option('Other beat positions','ghostMode',[['off','Off'],['adjacent','Previous + Next'],['all','All beats']],ui.ghostMode)}<div class="object-roster"><strong>SCENE OBJECTS</strong>${objects.map(o=>{const state=stateOf({type:o.kind,id:o.id});return `<button class="roster-item" data-action="select-object" data-id="${o.id}" data-kind="${o.kind}"><span class="roster-dot" style="background:${o.color}"></span>${esc(o.kind==='actor'?M.label(o.number)+' · '+o.name:o.kind==='camera'?'Cam '+o.number+' · '+o.name:o.name)}${state?.visible===false||!state?'<em>HIDDEN</em>':''}</button>`}).join('')}</div></div>${panelGrip('layers')}</aside>`}
 const exportPrefs=()=>({imageGhosts:false,videoGhosts:false,cones:true,paths:false,...project()?.exportPrefs});
 function exportPanel(){if(!ui.showExportPanel)return '';const e=exportPrefs();return `<aside class="export-pop side-pop" aria-label="Export options"><div class="panel-head"><strong>Export settings</strong>${btn('toggle-export-panel','×','','icon-only')}</div><p class="help">These settings apply to exports only, independently of what the editor shows.</p>${check('exportImageGhosts','Ghosts in PNG / ZIP',e.imageGhosts)}${check('exportVideoGhosts','Ghosts in video',e.videoGhosts)}${check('exportCones','Camera cones in image / video',e.cones)}${check('exportPaths','Dotted paths in exports',e.paths)}<div class="export-buttons">${btn('export-image','⇩','Current beat PNG','wide')}${btn('export-zip','⇩','All beats ZIP','wide')}${btn('export-video-dialog','▶','Animated WebM','wide')}${btn('backup','⇩','Project backup (.blockascene)','wide')}</div><p class="help">The current video format is WebM. MP4 requires an additional reliable encoding path.</p></aside>`}
 const tools=[['select','↖','Select'],['pan','<svg class="tool-icon" viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12V6.5a1.5 1.5 0 0 1 3 0V11"/><path d="M11 11V4.5a1.5 1.5 0 0 1 3 0V11"/><path d="M14 10V6a1.5 1.5 0 0 1 3 0v6"/><path d="M17 12a1.5 1.5 0 0 1 3 0v4c0 3.3-2.7 6-6 6h-3c-2.4 0-4-1.1-5.3-3.1L3.4 15a1.7 1.7 0 0 1 2.7-2l2 2"/></svg>','Pan'],['actor','●','Actor'],['camera','▣','Camera'],['wall','╱','Wall'],['door','⌞','Door'],['furniture','▭','Furniture'],['equipment','◇','Equipment']];
@@ -134,7 +161,39 @@ function modal(){
  return '';
 }
 
-function render(){ensureActive();app.innerHTML=ui.page==='manual'?manualPage():!project()?dashboard():ui.page==='project'?projectOverview():editor();if(ui.page==='editor'&&scene())initCanvas();if(ui.page==='manual'){const pane=app.querySelector('.manual-content');if(pane)pane.scrollTop=ui.manualScroll[ui.manualTab]||0}}
+let lastRenderedDialogKey='';
+function render(){
+ ensureActive();
+ const key=ui.dialog?ui.dialog.kind+':'+(ui.dialog.id||''):'';
+ // A background rerender must never discard unsaved text or the user's caret position.
+ const preserved=new Map(),active=document.activeElement;
+ let focusKey=null,caret=null;
+ if(key&&lastRenderedDialogKey===key){
+  for(const field of app.querySelectorAll?.('.dialog-card input,.dialog-card select,.dialog-card textarea')||[]){
+   const id=field.id||field.name;if(!id)continue;
+   preserved.set(id,{value:field.value,checked:field.checked});
+   if(field===active){focusKey=id;if(typeof field.selectionStart==='number')caret=[field.selectionStart,field.selectionEnd]}
+  }
+ }
+ app.innerHTML=ui.page==='manual'?manualPage():!project()?dashboard():ui.page==='project'?projectOverview():editor();
+ if(ui.page==='editor'&&scene())initCanvas();
+ if(ui.page==='manual'){const pane=app.querySelector('.manual-content');if(pane)pane.scrollTop=ui.manualScroll[ui.manualTab]||0}
+ if(key){
+  for(const field of app.querySelectorAll?.('.dialog-card input,.dialog-card select,.dialog-card textarea')||[]){
+   const saved=preserved.get(field.id||field.name);if(!saved)continue;
+   if(field.type==='checkbox'||field.type==='radio')field.checked=saved.checked;else field.value=saved.value;
+  }
+  const fields=app.querySelectorAll?.('.dialog-card input,.dialog-card select,.dialog-card textarea')||[];
+  const focused=focusKey?[...fields].find(el=>(el.id||el.name)===focusKey):null;
+  const target=focused||(key!==lastRenderedDialogKey?app.querySelector?.('#entityEditName')||app.querySelector?.('#beatEditName'):null);
+  if(target?.focus){
+   target.focus({preventScroll:true});
+   if(focused&&caret&&typeof target.setSelectionRange==='function')try{target.setSelectionRange(caret[0],caret[1])}catch{}
+   else if(!focused&&target.select)target.select();
+  }
+ }
+ lastRenderedDialogKey=key;
+}
 function cached(src){if(!src)return null;let record=images.get(src);if(!record){record={ready:false,img:new Image()};images.set(src,record);record.img.onload=()=>{record.ready=true;paint()};record.img.onerror=()=>console.warn('Image could not be loaded');record.img.src=src}return record.ready?record.img:null}
 function initCanvas(){canvas=document.getElementById('stage');wrap=document.getElementById('canvasWrap');ctx=canvas.getContext('2d');pointers.clear();drag=null;pinch=null;if(ui.autoFit){fitView();ui.autoFit=false}canvas.addEventListener('pointerdown',onDown);canvas.addEventListener('pointermove',onMove);canvas.addEventListener('pointerup',onUp);canvas.addEventListener('pointercancel',onUp);canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()});paint()}
 function fitView(){if(!wrap)return;const r=wrap.getBoundingClientRect(),scale=Math.max(.15,Math.min((r.width-65)/W,(r.height-35)/H,1.8));ui.view={scale,x:(r.width-W*scale)/2,y:(r.height-H*scale)/2}}
@@ -329,7 +388,7 @@ async function importBackground(file){if(!file)return;if(!['image/png','image/jp
 async function action(e){const target=e.target.closest('[data-action]');if(!target)return;e.preventDefault();e.stopPropagation();const a=target.dataset.action,id=target.dataset.id;if(a==='open-manual'){stopPlayback();ui.manualReturn=ui.page;ui.page='manual';ui.manualTab='start';ui.manualScroll={};ui.showMenu=false;ui.showLayers=false;ui.showExportPanel=false;render();return}if(a==='close-manual'){ui.page=ui.manualReturn||'workspace';render();return}if(a==='manual-tab'){const el=app.querySelector('.manual-content');if(el)ui.manualScroll[ui.manualTab]=el.scrollTop;ui.manualTab=target.dataset.tab||'start';render();return}if(a==='toggle-playback'){togglePlayback();return}if(playback.playing){playback.elapsedMs=elapsedPlayback();stopPlayback();}
  if(a==='new-project'){openEditDialog('new-project')}
  else if(a==='open-project')openProject(id);else if(a==='home')home();else if(a==='all-scenes'){stopPlayback();ui.page='project';ui.showMenu=false;render()}else if(a==='choose-scene')openScene(id);else if(a==='open-context'){const rect=target.getBoundingClientRect();openContext(target.dataset.kind,id,rect.right-210,rect.bottom+4)}else if(a==='close-context'){ui.context=null;render()}else if(a==='context-action'){const c=ui.context;ui.context=null;if(c){if(c.kind==='beat')beatCommand(c.id,target.dataset.command);else manageItem(c.kind,c.id,target.dataset.command)}}
- else if(a==='toggle-menu'){ui.showMenu=!ui.showMenu;render()}else if(a==='toggle-editor-ghosts'){if(ui.ghostMode==='off')ui.ghostMode=ui.previousGhostMode||'adjacent';else{ui.previousGhostMode=ui.ghostMode;ui.ghostMode='off'}render()}else if(a==='toggle-layers'){ui.showLayers=!ui.showLayers;ui.showExportPanel=false;if(ui.showLayers&&window.innerWidth<850)ui.showInspector=false;render()}else if(a==='toggle-inspector'){if(!ui.selection)ui.selection={type:'background'};ui.showInspector=!ui.showInspector;if(ui.showInspector&&window.innerWidth<850)ui.showLayers=false;render()}else if(a==='toggle-pin'){const key=target.dataset.panel==='layers'?'layersPinned':'propertiesPinned';ui.layout[key]=!ui.layout[key];saveLayout();render()}else if(a==='reset-layout'){ui.layout={layersPinned:false,propertiesPinned:false,layersWidth:290,propertiesWidth:300,timelineCollapsed:false};saveLayout();render()}else if(a==='toggle-timeline'){ui.layout.timelineCollapsed=!ui.layout.timelineCollapsed;saveLayout();render()}else if(a==='toggle-export-panel'){ui.showExportPanel=!ui.showExportPanel;ui.showLayers=false;render()}else if(a==='close-inspector'){ui.showInspector=false;render()}else if(a==='close-dialog'){ui.dialog=null;ui.videoDraft=null;render()}else if(a==='save-entity-dialog'){saveEntityDialog()}else if(a==='replace-set-background'){fileInput.click()}else if(a==='clear-set-background'){const st=project()?.sets.find(s=>s.id===ui.dialog?.id);if(st){checkpoint();st.background=null;images.clear();save();render();notice('Floor plan image removed')}}else if(a==='reset-beat-duration'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){checkpoint();delete b.holdMs;ui.dialog=null;save();render()}}else if(a==='save-beat-dialog'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){const name=app.querySelector('#beatEditName').value.trim(),secs=Number(app.querySelector('#beatEditHold').value);if(!name||!Number.isFinite(secs)||secs<.5||secs>30)return notice('Enter a name and duration between 0.5 and 30 seconds');checkpoint();b.name=name;b.holdMs=Math.round(secs*1000);ui.dialog=null;save();render()}}
+ else if(a==='toggle-menu'){ui.showMenu=!ui.showMenu;render()}else if(a==='toggle-editor-ghosts'){if(ui.ghostMode==='off')ui.ghostMode=ui.previousGhostMode||'adjacent';else{ui.previousGhostMode=ui.ghostMode;ui.ghostMode='off'}render()}else if(a==='toggle-layers'){ui.showLayers=!ui.showLayers;ui.showExportPanel=false;if(ui.showLayers&&window.innerWidth<850)ui.showInspector=false;render()}else if(a==='toggle-inspector'){if(!ui.selection)ui.selection={type:'background'};ui.showInspector=!ui.showInspector;if(ui.showInspector&&window.innerWidth<850)ui.showLayers=false;render()}else if(a==='toggle-pin'){const key=target.dataset.panel==='layers'?'layersPinned':'propertiesPinned';ui.layout[key]=!ui.layout[key];saveLayout();render()}else if(a==='switch-panel-side'){const p=target.dataset.panel==='layers'?'layers':'properties';ui.layout[p+'Side']=ui.layout[p+'Side']==='left'?'right':'left';ui.layout[p+'FloatX']=null;ui.layout[p+'FloatY']=null;saveLayout();render()}else if(a==='reset-layout'){ui.layout=defaultLayout();saveLayout();render()}else if(a==='toggle-timeline'){ui.layout.timelineCollapsed=!ui.layout.timelineCollapsed;saveLayout();render()}else if(a==='toggle-export-panel'){ui.showExportPanel=!ui.showExportPanel;ui.showLayers=false;render()}else if(a==='close-inspector'){ui.showInspector=false;render()}else if(a==='close-dialog'){ui.dialog=null;ui.videoDraft=null;render()}else if(a==='save-entity-dialog'){saveEntityDialog()}else if(a==='replace-set-background'){fileInput.click()}else if(a==='clear-set-background'){const st=project()?.sets.find(s=>s.id===ui.dialog?.id);if(st){checkpoint();st.background=null;images.clear();save();render();notice('Floor plan image removed')}}else if(a==='reset-beat-duration'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){checkpoint();delete b.holdMs;ui.dialog=null;save();render()}}else if(a==='save-beat-dialog'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){const name=app.querySelector('#beatEditName').value.trim(),secs=Number(app.querySelector('#beatEditHold').value);if(!name||!Number.isFinite(secs)||secs<.5||secs>30)return notice('Enter a name and duration between 0.5 and 30 seconds');checkpoint();b.name=name;b.holdMs=Math.round(secs*1000);ui.dialog=null;save();render()}}
  else if(a==='undo')undoAction();else if(a==='redo')redoAction();else if(a==='tool'){ui.tool=target.dataset.tool||'select';render()}else if(a==='toggle-equipment'){ui.tool=ui.tool==='equipment'?'select':'equipment';render()}else if(a==='place-equipment'){ui.tool='equip:'+target.dataset.shape;render()}
  else if(a==='choose-set'){checkpoint();scene().setId=id;ui.showMenu=false;ui.selection=null;save();render()}
  else if(a==='new-scene')openEditDialog('new-scene');else if(a==='new-set')openEditDialog('new-set');else if(a==='choose-beat')chooseBeat(id);else if(a==='add-beat')addBeat();
@@ -342,11 +401,68 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
  else if(a==='clear-bg'){checkpoint();set().background=null;images.clear();save();render()}else if(a==='export-image')await savePNG();else if(a==='export-zip')await saveZIP();else if(a==='export-video-dialog'){ui.showExportPanel=false;ui.videoDraft={...playbackOptions()};ui.dialog={kind:'video'};render()}else if(a==='confirm-video-export'){const c=ui.videoDraft||playbackOptions();project().playback=P.settings({...playbackOptions(),speed:Number(c.speed),holdMs:Number(c.holdMs),mode:c.mode});ui.videoDraft=null;ui.dialog=null;save();render();await saveVideo()}else if(a==='export-video')await saveVideo();else if(a==='save-project'){clearTimeout(saveTimer);await writeDB();notice('Project saved locally')}else if(a==='backup')backup()}
 app.addEventListener('click',action);
 app.addEventListener('scroll',e=>{if(ui.page==='manual'&&e.target?.classList?.contains('manual-content'))ui.manualScroll[ui.manualTab]=e.target.scrollTop},true);
-let resizePanel=null;
-app.addEventListener('pointerdown',e=>{const grip=e.target.closest('[data-resize-panel]');if(!grip)return;e.preventDefault();const panel=grip.dataset.resizePanel,el=grip.closest('[data-panel]');resizePanel={panel,startX:e.clientX,startWidth:el.getBoundingClientRect().width,el};grip.setPointerCapture(e.pointerId)});
-app.addEventListener('pointermove',e=>{if(!resizePanel)return;const d=resizePanel,delta=d.startX-e.clientX,width=clamp(d.startWidth+delta,220,470);d.el.style.width=width+'px';d.el.closest('.work-canvas')?.style.setProperty(d.panel==='layers'?'--b4-layers-width':'--b4-properties-width',width+'px');ui.layout[d.panel==='layers'?'layersWidth':'propertiesWidth']=width;paint()});
-app.addEventListener('pointerup',()=>{if(resizePanel){saveLayout();resizePanel=null}});
-app.addEventListener('pointercancel',()=>{resizePanel=null});
+let panelPointer=null;
+function panelBounds(root,el){
+ const stage=root.querySelector('#canvasWrap'),rootRect=root.getBoundingClientRect();
+ const area=stage?.getBoundingClientRect()||rootRect;
+ return {rootRect,left:area.left-rootRect.left+8,top:area.top-rootRect.top+8,right:area.right-rootRect.left-8,bottom:area.bottom-rootRect.top-8};
+}
+app.addEventListener('pointerdown',e=>{
+ const grip=e.target.closest('[data-resize-panel]'),handle=grip?null:e.target.closest('[data-drag-panel]');
+ if(!grip&&!handle)return;
+ if(e.pointerType==='mouse'&&e.button!==0)return;
+ if(handle&&e.target.closest('button,input,select,a,[data-action]'))return;
+ const trigger=grip||handle,panel=grip?.dataset.resizePanel||handle.dataset.dragPanel,el=trigger.closest('[data-panel]');
+ if(!el)return;
+ const root=el.closest('.work-canvas'),rect=el.getBoundingClientRect(),bounds=panelBounds(root,el);
+ const pinned=el.classList.contains('docked'),side=el.dataset.side||'right';
+ if(handle&&pinned)return;
+ e.preventDefault();
+ if(!pinned){
+  // Freeze computed position before moving or sizing so the box never jumps.
+  const left=rect.left-bounds.rootRect.left,top=rect.top-bounds.rootRect.top;
+  el.style.left=left+'px';el.style.top=top+'px';el.style.right='auto';el.style.bottom='auto';
+  el.dataset.moved='true';
+  ui.layout[panel+'FloatX']=Math.round(left);ui.layout[panel+'FloatY']=Math.round(top);
+ }
+ panelPointer={pointerId:e.pointerId,panel,mode:grip?'resize':'move',pinned,side,el,root,
+  startX:e.clientX,startY:e.clientY,startWidth:rect.width,startHeight:rect.height,
+  startLeft:rect.left-bounds.rootRect.left,startTop:rect.top-bounds.rootRect.top,
+  startStageWidth:root.querySelector('#canvasWrap')?.getBoundingClientRect().width||350};
+ try{trigger.setPointerCapture(e.pointerId)}catch{}
+});
+app.addEventListener('pointermove',e=>{
+ const d=panelPointer;if(!d||d.pointerId!==e.pointerId)return;
+ e.preventDefault();
+ const bounds=panelBounds(d.root,d.el),dx=e.clientX-d.startX,dy=e.clientY-d.startY;
+ if(d.mode==='move'){
+  const width=d.el.getBoundingClientRect().width,height=d.el.getBoundingClientRect().height;
+  const left=clamp(d.startLeft+dx,bounds.left,Math.max(bounds.left,bounds.right-width));
+  const top=clamp(d.startTop+dy,bounds.top,Math.max(bounds.top,bounds.bottom-Math.min(height,48)));
+  d.el.style.left=left+'px';d.el.style.top=top+'px';
+  ui.layout[d.panel+'FloatX']=Math.round(left);ui.layout[d.panel+'FloatY']=Math.round(top);
+ }else{
+  const maxWidth=d.pinned?Math.min(470,Math.max(220,d.startWidth+d.startStageWidth-240)):
+   Math.min(470,Math.max(220,bounds.right-d.startLeft));
+  const delta=d.pinned?(d.side==='left'?dx:-dx):dx;
+  const width=clamp(d.startWidth+delta,220,maxWidth);
+  d.el.style.width=width+'px';ui.layout[d.panel+'Width']=Math.round(width);
+  if(d.pinned){
+   d.root.style.setProperty(d.panel==='layers'?'--b4-layers-width':'--b4-properties-width',Math.round(width)+'px');
+   paint();
+  }else{
+   const height=clamp(d.startHeight+dy,230,Math.max(230,bounds.bottom-d.startTop));
+   d.el.style.height=height+'px';ui.layout[d.panel+'FloatHeight']=Math.round(height);
+  }
+ }
+});
+function endPanelPointer(e){
+ if(panelPointer&&e.pointerId===panelPointer.pointerId){
+  panelPointer=null;saveLayout();
+ }
+}
+app.addEventListener('pointerup',endPanelPointer);
+app.addEventListener('pointercancel',endPanelPointer);
 app.addEventListener('contextmenu',e=>{const t=e.target.closest('[data-context-kind]');if(!t)return;e.preventDefault();openContext(t.dataset.contextKind,t.dataset.id,e.clientX,e.clientY)});
 let holdTimer=null,holdStart=null;
 app.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;const t=e.target.closest('[data-context-kind]');if(!t)return;holdStart={x:e.clientX,y:e.clientY};clearTimeout(holdTimer);holdTimer=setTimeout(()=>{holdTimer=null;openContext(t.dataset.contextKind,t.dataset.id,e.clientX,e.clientY)},570)});
