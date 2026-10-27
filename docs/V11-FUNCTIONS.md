@@ -31,3 +31,8 @@ Windows remains the only supported build target. The design-system overhaul is d
 - Automated model, playback and manual tests run in CI.
 - Confirm Windows EXE packaging and download.
 - User should additionally smoke-test the scene editor and video export on a real Windows computer.
+
+## v1.1 regressions
+- Test the Windows EXE on a real PC before replacing the stable v1.0 release.
+- Touch gestures remain supported by design but need later physical device verification.
+- Docking/rotation behavior and WebM export need human acceptance testing.

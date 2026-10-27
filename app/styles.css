@@ -168,3 +168,7 @@ input[type=range],input[type=checkbox]{accent-color:var(--brand-red)}
 /* v1.1 F4: export dropdown aligned with toolbar */
 .export-pop{left:auto;right:60px;top:8px;width:min(325px,calc(100% - 70px));max-height:calc(100% - 14px);z-index:8;border-radius:12px}
 @media(max-width:720px){.export-pop{left:auto;right:55px;top:8px;width:min(325px,calc(100% - 66px));max-height:calc(100% - 14px)}}
+
+/* Floating windows stand beside each other when both are open. */
+.work-canvas:has(.inspector:not(.docked)) .layers-pop:not(.docked){right:calc(59px + 310px)}
+@media(max-width:720px){.work-canvas:has(.inspector:not(.docked)) .layers-pop:not(.docked){right:55px}}
