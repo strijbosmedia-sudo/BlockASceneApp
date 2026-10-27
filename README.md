@@ -1,4 +1,4 @@
-# Block4Film v1.1.1 (Functional Fixes)
+# Block4Film v1.1.2 (Functional Polish)
 
 **Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor currently developed and distributed for Windows.
 
@@ -144,3 +144,7 @@ We are intentionally pausing macOS and Android distribution while refining the W
 ## v1.1.1 functional bugfix release
 
 See [the detailed change list](docs/V111-FIXES.md).
+
+## v1.1.2 final functional polish
+
+See [layout and focus fixes](docs/V112-POLISH.md). The visual redesign comes next after Windows acceptance testing.
