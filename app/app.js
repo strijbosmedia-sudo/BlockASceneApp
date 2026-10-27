@@ -54,14 +54,43 @@ function redoAction(){if(!redo.length)return notice('No changes to redo');undo.p
 function ensureActive(){if(ui.projectId&&!project())ui.projectId=null;const p=project();if(!p)return;if(!p.scenes.find(s=>s.id===ui.sceneId))ui.sceneId=p.scenes[0]?.id||null;const s=scene();if(s&&!s.beats.some(b=>b.id===ui.beatId))ui.beatId=s.beats[0]?.id||null}
 function openProject(id){stopPlayback();ui.page='project';ui.showMenu=false;ui.projectId=id;ui.sceneId=null;ui.beatId=null;ui.selection=null;ui.showInspector=false;ui.autoFit=true;undo=[];redo=[];ensureActive();render()}
 function home(){stopPlayback();ui.context=null;ui.dialog=null;ui.page='workspace';ui.projectId=null;ui.selection=null;ui.showInspector=false;ui.showLayers=false;ui.showMenu=false;render()}
-const btn=(action,icon,text='',cls='',extra='')=>`<button class="action ${cls}" data-action="${action}" aria-label="${esc(text||action)}" title="${esc(text||action)}" ${extra}><span class="glyph">${icon}</span>${text?`<span class="action-label">${esc(text)}</span>`:''}</button>`;
+const ICONS={
+ 'menu':'<path d="M4 6h16M4 12h16M4 18h16"/>','home':'<path d="m3 10 9-7 9 7v10H3zM9 20v-7h6v7"/>',
+ 'book':'<path d="M4 5h7a3 3 0 0 1 3 3v13a3 3 0 0 0-3-3H4zm16 0h-7a3 3 0 0 0-3 3v13a3 3 0 0 1 3-3h7z"/>',
+ 'plus':'<path d="M12 5v14M5 12h14"/>','upload':'<path d="M12 16V3m-5 5 5-5 5 5M4 16v4h16v-4"/>',
+ 'download':'<path d="M12 3v13m-5-5 5 5 5-5M4 18v3h16v-3"/>',
+ 'save':'<path d="M4 4h14l2 2v14H4zM7 4v6h10V4M7 20v-7h10v7"/>',
+ 'chevron-left':'<path d="m14 5-7 7 7 7"/>','chevron-down':'<path d="m6 9 6 6 6-6"/>',
+ 'undo':'<path d="M9 14 4 9l5-5M4 9h10a6 6 0 1 1 0 12"/>',
+ 'redo':'<path d="m15 14 5-5-5-5M20 9H10a6 6 0 1 0 0 12"/>',
+ 'layers':'<path d="m12 2 10 5-10 5L2 7zM2 12l10 5 10-5M2 17l10 5 10-5"/>',
+ 'sliders':'<path d="M4 7h16M4 17h16M8 4v6m8 4v6"/>',
+ 'x':'<path d="M5 5 19 19M19 5 5 19"/>',
+ 'copy':'<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/>',
+ 'trash':'<path d="M4 7h16M10 4h4M7 7l1 14h8l1-14M10 11v7m4-7v7"/>',
+ 'edit':'<path d="M3 17v4h4L20 8l-4-4L3 17ZM14 6l4 4"/>',
+ 'eye':'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/>',
+ 'panel':'<rect x="3" y="3" width="18" height="18" rx="2"/><path d="M8 3v18"/>',
+ 'settings':'<path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2"/><circle cx="15" cy="12" r="2"/>',
+ 'film':'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 4v16M17 4v16M3 9h4m10 0h4M3 15h4m10 0h4"/>',
+ 'image':'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="2"/><path d="m3 17 6-6 4 4 3-3 5 5"/>',
+ 'search':'<circle cx="10" cy="10" r="7"/><path d="m15 15 6 6"/>',
+ 'grid':'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+ 'check':'<path d="m4 12 5 5 11-11"/>',
+ 'pin':'<path d="m8 4 8 0 1 6 3 3v2H4v-2l3-3zM12 15v7"/>',
+ 'move':'<path d="M12 2v20M2 12h20m-4-4 4 4-4 4M8 8l4-6 4 6M8 16l4 6 4-6M6 8l-4 4 4 4"/>',
+ 'camera':'<rect x="2" y="7" width="15" height="12" rx="2"/><path d="m17 11 5-3v10l-5-3M6 7l2-3h5l2 3"/>',
+ 'user':'<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>'
+};
+const iconMark=(name)=>ICONS[name]?`<svg class="b4-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`:name;
+const btn=(action,icon,text='',cls='',extra='')=>`<button class="action ${cls}" data-action="${action}" aria-label="${esc(text||action)}" title="${esc(text||action)}" ${extra}><span class="glyph">${iconMark(icon)}</span>${text?`<span class="action-label">${esc(text)}</span>`:''}</button>`;
 function topbar(){
  const editorPage=!!project()&&ui.page==='editor';
  const brand=`<div class="brand"><b>Block<span class="brand-four">4</span>Film</b></div>`;
- const menu=btn('toggle-menu',ui.showMenu?'×':'☰','','menu-toggle icon-only','aria-label="Menu" title="Menu"');
- const homeButton=project()?btn('home','⌂','All projects','home-link icon-only'):'';
- const crumb=project()?`<span class="crumb">${esc(project().name)}${editorPage?' / '+esc(scene()?.name||'Scene'):''}</span>`:'';
- return `<header class="topbar"><div class="top-left">${menu}${homeButton}${brand}${btn('open-manual','?','Manual','small header-manual')}${crumb}</div><div class="top-actions">${editorPage?`${btn('undo','↶','Undo','icon-only')}${btn('redo','↷','Redo','icon-only')}${btn('toggle-editor-ghosts',ui.ghostMode==='off'?'◌':'◉','Beat ghosts','icon-only ghost-quick')}${btn('save-project','✓','Save','small')}${btn('toggle-export-panel','⇩','Export','small top-export')}`:`${btn('import-project','↑','Import','small')}`}</div></header>`
+ const menu=btn('toggle-menu','menu','','menu-toggle icon-only','aria-label="Menu" title="Menu"');
+ const homeButton=project()?btn('home','home','All projects','home-link icon-only'):'';
+ const crumb=project()?`<span class="crumb">${esc(project().name)}${editorPage?' <span class="crumb-divider">›</span> '+esc(scene()?.name||'Scene'):''}</span>`:'';
+ return `<header class="topbar"><div class="top-left">${menu}${homeButton}${brand}${btn('open-manual','book','Manual','small header-manual')}${crumb}</div><div class="top-actions">${editorPage?`${btn('undo','undo','Undo','icon-only')}${btn('redo','redo','Redo','icon-only')}${btn('toggle-editor-ghosts','eye','Beat ghosts','icon-only ghost-quick')}${btn('save-project','save','Save','small')}${btn('toggle-export-panel','download','Export','small top-export')}`:`${btn('import-project','upload','Import','small')}`}</div></header>`
 }
 function dashboard(){return `<div class="app">${topbar()}${workspaceMenu()}<main class="dashboard"><div class="dashboard-title"><div><p class="eyebrow">YOUR WORKSPACE</p><h1>Projects</h1></div></div><div class="project-grid">${database.projects.map(p=>`<article class="project-tile" tabindex="0" role="button" data-action="open-project" data-context-kind="project" data-id="${esc(p.id)}"><div class="tile-visual"><img src="./assets/demo-plan.svg" alt="Set preview"/><span>${p.scenes.length} SCENES</span></div><div class="tile-info"><strong>${esc(p.name)}</strong><button class="more" data-action="open-context" data-kind="project" data-id="${esc(p.id)}" aria-label="Project options">⋯</button><small>${p.sets.length} sets · Updated ${new Date(p.updatedAt).toLocaleDateString()}</small></div></article>`).join('')}<button class="project-tile new-tile" data-action="new-project" aria-label="Create new project"><span class="plus">+</span><strong>New project</strong></button></div><p class="dash-footnote">Projects save offline. Use Export Project to create a transferable backup.</p></main>${contextMenu()}${modal()}</div>`}
 function workspaceMenu(){return `<aside class="drawer ${ui.showMenu?'open':''}"><div class="drawer-head"><b>Menu</b>${btn('toggle-menu','×','','icon-only')}</div>${btn('new-project','+','New project','drawer-btn')}${btn('import-project','↑','Import project','drawer-btn')}${btn('open-manual','?','Manual','drawer-btn')}</aside>`}
