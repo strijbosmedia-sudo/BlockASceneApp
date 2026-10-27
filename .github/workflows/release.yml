@@ -23,8 +23,21 @@ jobs:
         run: npm install --no-audit --no-fund
       - name: Validate editor
         run: npm run test:model
-      - name: Build portable Windows EXE
+      - name: Build portable Windows EXE (sign only with trusted certificate)
         run: npm run dist:win
+        env:
+          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      - name: Verify Authenticode when signing was requested
+        if: ${{ env.SIGN_WINDOWS == 'true' }}
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem dist -Filter '*.exe' | Select-Object -First 1
+          $signature = Get-AuthenticodeSignature $exe.FullName
+          if ($signature.Status -ne 'Valid') { throw "Code signing failed: $($signature.Status)" }
+          Write-Host "Signed by $($signature.SignerCertificate.Subject)"
+        env:
+          SIGN_WINDOWS: ${{ secrets.WIN_CSC_LINK != '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: windows-portable
@@ -42,7 +55,7 @@ jobs:
       - name: Publish Windows release and retire cross-platform beta
         env:
           GH_TOKEN: ${{ github.token }}
-          WINDOWS_TAG: v1.2.1-polish-beta.1
+          WINDOWS_TAG: v1.3.0
         run: |
           set -euo pipefail
           ls -lh release-assets/*.exe
@@ -51,8 +64,7 @@ jobs:
           else
             gh release create "$WINDOWS_TAG" release-assets/*.exe \
               --target "$GITHUB_SHA" \
-              --title "Block4Film 1.2.1 - Visual Polish Beta" \
-              --notes "Windows-only Block4Film v1.2.1 polish beta. Fixes pinned Properties rail selection, responsive Workspace grid layout, automatic first-free actor letters/camera numbers and editable collision-safe scene identities, and adds top-bar Back to Scenes. Existing v1.2.0 and all older releases remain available. Export a .blockascene backup before testing." \
-              --prerelease
+              --title "Block4Film 1.3.0 - strijbos.media Windows Release" \
+              --notes "Block4Film 1.3.0: approved cinematic Windows release, publisher branding strijbos.media. Includes Workspace, scene editor, preview images, panel docking, playback, project backups and v1.2.1 polish. Windows Authenticode signing is enabled only when a trusted certificate is configured in CI. Unsigned EXEs may still show Unknown publisher. macOS/Android/iOS builds are separate preview pipelines and are not certified production releases. Back up projects before installing." \
           fi
           gh release view "$WINDOWS_TAG" --json assets --jq '.assets[].name' | grep -qE '\.exe$'

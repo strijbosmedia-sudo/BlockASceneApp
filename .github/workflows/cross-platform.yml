@@ -1,0 +1,92 @@
+name: Build Block4Film macOS Android and iOS test packages
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths: ['app/**','mobile/**','scripts/**','package.json','capacitor.config.json','.github/workflows/cross-platform.yml']
+  push:
+    branches: [main]
+    paths: ['app/**','mobile/**','scripts/**','package.json','capacitor.config.json','.github/workflows/cross-platform.yml']
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check Block4Film documents and portability
+        run: npm run test:model
+      - name: Build macOS packages
+        run: npm run dist:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Block4Film-1.3-macOS-UNSIGNED-TEST
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
+          retention-days: 14
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v4
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check editor and prepare mobile assets
+        run: |
+          npm run test:model
+          npm run mobile:android
+      - name: Build Android debug APK for testing
+        working-directory: android
+        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Block4Film-1.3-Android-DEBUG-TEST-APK
+          path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Prepare Capacitor iOS project
+        run: npm run mobile:ios
+      - name: Build iOS Simulator application without device signing
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj \
+            -scheme App -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/Block4Film-iOS" \
+            CODE_SIGNING_ALLOWED=NO build
+          APP_DIR="$RUNNER_TEMP/Block4Film-iOS/Build/Products/Debug-iphonesimulator/App.app"
+          test -d "$APP_DIR"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_DIR" "$RUNNER_TEMP/Block4Film-1.3-iOS-Simulator.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Block4Film-1.3-iOS-SIMULATOR-ONLY
+          path: ${{ runner.temp }}/Block4Film-1.3-iOS-Simulator.zip
+          if-no-files-found: error
+          retention-days: 14

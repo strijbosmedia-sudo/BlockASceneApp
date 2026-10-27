@@ -7,3 +7,10 @@ dist/
 # Generated from designer-supplied SVG during npm run icons
 app/assets/Block4Film.ico
 app/assets/Block4Film-Icon.png
+
+# Regenerate Capacitor native projects and bundled assets from source in CI
+mobile/www/
+android/
+ios/
+app/assets/Block4Film.icns
+app/assets/Block4Film.iconset/

@@ -1,4 +1,4 @@
-# Block4Film v1.2.0 (Cinematic Visual Redesign Beta)
+# Block4Film 1.3.0 · strijbos.media
 
 **Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor currently developed and distributed for Windows.
 
@@ -156,3 +156,7 @@ The v1.2.0 beta implements the charcoal visual system, workspace/scene libraries
 ## v1.2.1 polishing update
 
 See [the v1.2.1 functionality and layout notes](docs/V121-POLISH.md). The v1.2.0 visual baseline remains unchanged.
+
+## Version 1.3 and platform builds
+
+Windows is the approved release baseline. macOS/Android/iOS preliminary packages and the Windows code-signing configuration are described in [Cross-platform build guide](docs/V13-PLATFORMS.md).
