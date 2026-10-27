@@ -602,7 +602,7 @@ input:hover,select:hover{border-color:#676b75}
  column-gap:clamp(10px,1.8vw,18px);row-gap:clamp(10px,1.8vw,18px)
 }
 .workspace-library .project-grid:not(.list-view)>.project-tile{
- min-width:0;max-width:100%;width:100%;height:auto;aspect-ratio:1;box-sizing:border-box
+ min-width:0;min-height:0;max-width:100%;width:100%;height:auto;aspect-ratio:1;box-sizing:border-box
 }
 .workspace-library .project-grid:not(.list-view) .tile-info{min-width:0}
 .workspace-library .project-grid:not(.list-view) .tile-info>strong,
