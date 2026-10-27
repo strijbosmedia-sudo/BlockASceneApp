@@ -1,4 +1,4 @@
-# Block4Film v0.3.2
+# Block4Film v1.0.0
 
 **Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor for Windows, desktop browsers and touch tablets.
 
@@ -88,3 +88,10 @@ The GitHub repository name intentionally remains `BlockASceneApp` for link compa
 - Existing project storage and the application's identity remain unchanged.
 
 **Portable EXE:** The app runs on compatible Windows PCs without an installer, but projects remain stored locally on each machine. Use `.blockascene` export/import to transfer them.
+
+## Windows v1 polish
+- Red brand accent in the '4', primary actions and active selections; actor/camera colors stay independent.
+- Pan uses a monochrome SVG hand.
+- Startup splash is visible for at least 1.75 seconds.
+- Offline manual with seven clickable chapters appears in editor Menu and on the project dashboard.
+- Windows v1 is the release checkpoint; macOS and Android APK packaging follow later.
