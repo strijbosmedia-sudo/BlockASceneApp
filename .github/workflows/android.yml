@@ -24,7 +24,8 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      # Ubuntu runners include Android SDK tooling; setup-android@v3 incorrectly
+      # requests the obsolete 'tools' SDK package on current runner images.
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Test core editor
