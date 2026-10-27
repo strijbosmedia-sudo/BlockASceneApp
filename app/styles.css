@@ -209,3 +209,101 @@ input[type=range],input[type=checkbox]{accent-color:var(--brand-red)}
   right:55px;max-width:calc(100vw - 115px)
  }
 }
+
+/* v1.1.2: Independent panel docking sides, draggable/resizable floating panels.
+   This is a functional layout pass; broader visual restyling remains Stage 2. */
+.work-canvas>.toolrail{order:0}
+.work-canvas>.stage{order:5}
+.work-canvas>.utility-rail{order:10}
+.work-canvas>.layers-pop.docked[data-side="left"]{order:1}
+.work-canvas>.inspector.docked[data-side="left"]{order:2}
+.work-canvas>.layers-pop.docked[data-side="right"]{order:6}
+.work-canvas>.inspector.docked[data-side="right"]{order:7}
+
+.work-canvas>.inspector.docked,
+.work-canvas>.layers-pop.docked{
+ position:relative;inset:auto;top:auto;bottom:auto;left:auto;right:auto;
+ display:flex;flex-direction:column;min-width:0;max-height:none;height:100%;
+ margin:0;padding:0;overflow:hidden;box-shadow:none;border-radius:0;
+}
+.work-canvas>.inspector.panel-float,
+.work-canvas>.layers-pop.panel-float{
+ position:absolute;display:flex;flex-direction:column;top:9px;bottom:auto;
+ padding:0;margin:0;overflow:hidden;max-height:calc(100% - 18px);
+ max-width:calc(100% - 125px);border-radius:11px;z-index:7;
+ box-shadow:0 17px 42px #000b;
+}
+/* Side button affects both pinned and floating panels. Dragged positions win
+   through their inline left/top coordinates until the side button is used. */
+.work-canvas>.panel-float[data-side="right"][data-moved="false"]{right:59px;left:auto}
+.work-canvas>.panel-float[data-side="left"][data-moved="false"]{left:77px;right:auto}
+.work-canvas>.panel-float[data-moved="true"]{right:auto}
+
+.work-canvas:has(.layers-pop.docked[data-side="right"]) .inspector.panel-float[data-side="right"][data-moved="false"]{
+ right:calc(59px + var(--b4-layers-width,290px) + 12px);left:auto
+}
+.work-canvas:has(.inspector.docked[data-side="right"]) .layers-pop.panel-float[data-side="right"][data-moved="false"]{
+ right:calc(59px + var(--b4-properties-width,300px) + 12px);left:auto
+}
+.work-canvas:has(.layers-pop.docked[data-side="left"]) .inspector.panel-float[data-side="left"][data-moved="false"]{
+ left:calc(77px + var(--b4-layers-width,290px) + 12px);right:auto
+}
+.work-canvas:has(.inspector.docked[data-side="left"]) .layers-pop.panel-float[data-side="left"][data-moved="false"]{
+ left:calc(77px + var(--b4-properties-width,300px) + 12px);right:auto
+}
+/* When neither is pinned, open the second window beside the first by default. */
+.work-canvas:has(.inspector.panel-float[data-side="right"][data-moved="false"])
+ .layers-pop.panel-float[data-side="right"][data-moved="false"]{
+ right:calc(59px + var(--b4-properties-width,300px) + 12px);left:auto
+}
+.work-canvas:has(.inspector.panel-float[data-side="left"][data-moved="false"])
+ .layers-pop.panel-float[data-side="left"][data-moved="false"]{
+ left:calc(77px + var(--b4-properties-width,300px) + 12px);right:auto
+}
+.work-canvas .panel-header{
+ display:flex;align-items:center;justify-content:space-between;gap:6px;
+ flex-shrink:0;min-height:46px;margin:0;user-select:none;
+}
+.work-canvas .panel-float .panel-header{cursor:grab;touch-action:none}
+.work-canvas .panel-float .panel-header:active{cursor:grabbing}
+.work-canvas .panel-head-buttons{display:flex;align-items:center;gap:1px;flex-shrink:0}
+.work-canvas .panel-head-buttons .action.icon-only{
+ width:31px;min-width:31px;height:34px;min-height:34px;padding:0;
+ font-size:17px;touch-action:manipulation
+}
+.work-canvas .layers-pop .panel-head{padding:7px 9px;border-bottom:1px solid #32343a}
+.work-canvas .layers-pop .panel-head strong{margin:0!important;font-size:12px}
+.work-canvas .inspector .inspector-head{padding:5px 8px 5px 12px}
+.work-canvas .layers-body{min-height:0;flex:1;overflow-y:auto;overflow-x:hidden;padding:14px;scrollbar-width:thin}
+.work-canvas .inspector .inspect-body{min-height:0;flex:1;overflow-y:auto;scrollbar-width:thin}
+.work-canvas .panel-resizer{z-index:11;touch-action:none;background:transparent;position:absolute}
+.work-canvas .panel-resizer.is-docked{
+ top:0;bottom:0;width:10px;height:auto;cursor:ew-resize;
+}
+.work-canvas .panel-resizer.is-docked[data-side="right"]{left:0;right:auto}
+.work-canvas .panel-resizer.is-docked[data-side="left"]{right:0;left:auto}
+.work-canvas .panel-resizer.is-floating{
+ top:auto;left:auto;bottom:0;right:0;width:22px;height:22px;
+ cursor:nwse-resize;
+ background:linear-gradient(135deg,transparent 65%,#777984 65%,#777984 72%,transparent 72%);
+ border-bottom-right-radius:10px
+}
+.work-canvas .panel-resizer:hover{background-color:#e0534433}
+
+/* In narrow windows, panels behave as overlays and only one opens at a time.
+   Docking preferences are preserved so they return when the window widens. */
+@media(max-width:850px){
+ .work-canvas>.inspector.docked,.work-canvas>.layers-pop.docked{
+  position:absolute;top:7px;bottom:auto;height:min(55%,480px);
+  z-index:7;border-radius:10px;box-shadow:0 12px 30px #000b
+ }
+ .work-canvas>.inspector,.work-canvas>.layers-pop{
+  max-width:calc(100% - 70px);
+  width:min(320px,calc(100% - 70px))!important
+ }
+ .work-canvas>.panel-float[data-side="left"][data-moved="false"]{left:8px;right:auto}
+ .work-canvas>.panel-float[data-side="right"][data-moved="false"]{right:55px;left:auto}
+ .work-canvas>.panel-resizer.is-docked{display:none}
+ .work-canvas>.inspector.docked[data-side="right"],.work-canvas>.layers-pop.docked[data-side="right"]{right:55px;left:auto}
+ .work-canvas>.inspector.docked[data-side="left"],.work-canvas>.layers-pop.docked[data-side="left"]{left:8px;right:auto}
+}
