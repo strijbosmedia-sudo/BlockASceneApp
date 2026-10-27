@@ -473,30 +473,54 @@ function hitAt(w){const sc=scene(),b=beat();if(!sc||!b)return null;
  return null}
 function place(tool,pos){checkpoint();const p=project(),s=scene(),b=beat();let entry;if(['actor','camera'].includes(tool)){entry=M.addIdentity(p,s,tool,b,pos);ui.selection={type:tool,id:entry.id}}else if(tool.startsWith('equip:')){entry=M.addIdentity(p,s,'equipment',b,pos,tool.slice(6));ui.selection={type:'equipment',id:entry.id}}else{entry={id:M.uid(),name:tool==='furniture'?'Table':'',type:tool,x:pos.x,y:pos.y,w:tool==='wall'?160:tool==='door'?80:110,h:tool==='furniture'?80:0,rotation:0};set().objects.push(entry);ui.selection={type:'setobj',id:entry.id}}ui.showInspector=true;ui.tool='select';save();render()}
 function onDown(e){
- if(playback.playing||playback.frame){stopPlayback();playback.elapsedMs=0;}
+ if(playback.playing||playback.frame){stopPlayback();playback.elapsedMs=0}
  const middle=e.pointerType==='mouse'&&e.button===1;
  if(e.pointerType==='mouse'&&e.button!==0&&!middle)return;
  e.preventDefault();
  const p=canvasPoint(e),w=world(p);
- canvas.setPointerCapture(e.pointerId);
- pointers.set(e.pointerId,p);
- // Two touch contacts take precedence over selection, moving and placing objects.
+ canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,p);
  if(pointers.size>=2){
-  if(drag?.changed&&['move','rotate','endpoint'].includes(drag.mode))save();
+  clearTimeout(touchMoveTimer);touchMoveTimer=null;
+  if(drag?.changed&&drag.checkpointed)save();
   drag=null;
   if(pointers.size===2){const [a,b]=[...pointers.values()],mid={x:(a.x+b.x)/2,y:(a.y+b.y)/2};pinch={dist:Math.max(5,Math.hypot(a.x-b.x,a.y-b.y)),scale:ui.view.scale,anchor:world(mid)}}
   return;
  }
  if(middle){drag={mode:'pan',start:p,initial:{...ui.view},changed:false};canvas.classList.add('panning');return}
- const placing= !['select','pan','equipment'].includes(ui.tool) || ui.tool.startsWith('equip:');
+ const placing=!['select','pan','equipment'].includes(ui.tool)||ui.tool.startsWith('equip:');
  if(placing){
-  // Defer a finger tap until release, so adding a second finger never creates a stray object.
-  if(e.pointerType==='touch'){drag={mode:'pending-place',tool:ui.tool,start:p,changed:false};return}
-  pointers.delete(e.pointerId);if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);place(ui.tool,w);return;
+  if(e.pointerType==='touch'||e.pointerType==='pen'){drag={mode:'pending-place',tool:ui.tool,start:p,changed:false};return}
+  pointers.delete(e.pointerId);if(canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
+  place(ui.tool,w);return;
  }
  const hit=ui.tool==='pan'?null:hitAt(w);
- if(hit&&hit.selection){ui.selection=hit.selection;ui.showInspector=true;checkpoint();const o=stateOf(),angle=deg(Math.atan2(w.y-o.y,w.x-o.x));drag={mode:hit.type==='rotate'?'rotate':hit.type==='endpoint'?'endpoint':'move',start:p,initial:{...o},startAngle:angle,changed:false}}
- else{if(ui.tool!=='pan'){ui.selection=null;ui.showInspector=false}drag={mode:'pan',start:p,initial:{...ui.view},changed:false}}
+ if(hit?.selection){
+  const alreadySelected=ui.selection?.type===hit.selection.type&&ui.selection.id===hit.selection.id;
+  ui.selection=hit.selection;ui.showInspector=true;
+  const state=stateOf();
+  if(hit.keyId)ui.motionKeyId=hit.keyId;
+  else if(!alreadySelected)ui.motionKeyId=null;
+  const key=hit.keyId&&state?.motion?.keys?.find(k=>k.id===hit.keyId);
+  const rotationCenter=hit.type==='end-rotate'&&state?.motion?{x:state.motion.endX,y:state.motion.endY}:
+   hit.type==='key-rotate'&&key?key:{x:state.x,y:state.y};
+  const angle=deg(Math.atan2(w.y-rotationCenter.y,w.x-rotationCenter.x));
+  const mode=hit.type==='object'?'move':hit.type;
+  drag={mode,start:p,initial:{...state},startAngle:angle,keyId:hit.keyId,changed:false,checkpointed:false};
+  // A new selection is always tap-first. Only a brief hold promotes it to movement.
+  if(mode==='move'&&!alreadySelected){
+   drag.mode='pending-select';
+   const pointerId=e.pointerId,ref=drag;
+   clearTimeout(touchMoveTimer);
+   touchMoveTimer=setTimeout(()=>{
+    touchMoveTimer=null;
+    if(drag!==ref||ref.preHoldMoved||!pointers.has(pointerId))return;
+    ref.mode='move';ref.start={...pointers.get(pointerId)};ref.initial={...stateOf()};
+   },TOUCH_HOLD_MS);
+  }
+ }else{
+  if(ui.tool!=='pan'){ui.selection=null;ui.showInspector=false;ui.motionKeyId=null}
+  drag={mode:'pan',start:p,initial:{...ui.view},changed:false};
+ }
  if(drag.mode==='pan')canvas.classList.add('panning');
  paint();
 }
@@ -511,13 +535,41 @@ function onMove(e){
  }
  if(!drag)return;
  const dx=p.x-drag.start.x,dy=p.y-drag.start.y;
- if(Math.abs(dx)+Math.abs(dy)>4)drag.changed=true;
- if(drag.mode==='pending-place')return;
- if(drag.mode==='pan'){ui.view.x=drag.initial.x+dx;ui.view.y=drag.initial.y+dy}
- else{const state=stateOf();if(!state)return;
-  if(drag.mode==='move'){const mx=dx/ui.view.scale,my=dy/ui.view.scale;state.x=drag.initial.x+mx;state.y=drag.initial.y+my;if(state.motion){state.motion.endX=drag.initial.motion.endX+mx;state.motion.endY=drag.initial.motion.endY+my}}
-  else if(drag.mode==='rotate'){const w=world(p);let angle=drag.initial.rotation+deg(Math.atan2(w.y-state.y,w.x-state.x))-drag.startAngle;if(e.shiftKey)angle=Math.round(angle/15)*15;state.rotation=angle}
-  else if(drag.mode==='endpoint'&&state.motion){const w=world(p);state.motion.endX=w.x;state.motion.endY=w.y}
+ if(drag.mode==='pending-place'){if(Math.hypot(dx,dy)>DRAG_SLOP_PX)drag.changed=true;return}
+ if(drag.mode==='pending-select'){
+  if(Math.hypot(dx,dy)>DRAG_SLOP_PX){drag.preHoldMoved=true;clearTimeout(touchMoveTimer);touchMoveTimer=null}
+  return;
+ }
+ if(drag.mode==='pan'){
+  if(Math.hypot(dx,dy)>2){ui.view.x=drag.initial.x+dx;ui.view.y=drag.initial.y+dy;drag.changed=true;paint()}
+  return;
+ }
+ if(Math.hypot(dx,dy)<DRAG_SLOP_PX&&!drag.changed)return;
+ const state=stateOf();if(!state)return;
+ if(!drag.checkpointed){checkpoint();drag.checkpointed=true}
+ drag.changed=true;
+ if(drag.mode==='move'){
+  state.x=drag.initial.x+dx/ui.view.scale;
+  state.y=drag.initial.y+dy/ui.view.scale;
+  // An end point is anchored: dragging the start cannot drag a defined destination.
+  // Pan/turn in place is the one exception where both coordinates must coincide.
+  if(state.motion&&['turn','pan'].includes(state.motion.kind)){state.motion.endX=state.x;state.motion.endY=state.y}
+ }else if(drag.mode==='rotate'){
+  const w=world(p);
+  let angle=drag.initial.rotation+deg(Math.atan2(w.y-state.y,w.x-state.x))-drag.startAngle;
+  if(e.shiftKey)angle=Math.round(angle/15)*15;
+  state.rotation=angle;
+ }else if(drag.mode==='endpoint'&&state.motion){
+  const w=world(p);state.motion.endX=w.x;state.motion.endY=w.y;
+ }else if(drag.mode==='end-rotate'&&state.motion){
+  const w=world(p);let angle=deg(Math.atan2(w.y-state.motion.endY,w.x-state.motion.endX));
+  if(e.shiftKey)angle=Math.round(angle/15)*15;
+  state.motion.endRotation=angle;
+ }else if(['keyframe','key-rotate'].includes(drag.mode)&&state.motion){
+  const key=state.motion.keys?.find(k=>k.id===drag.keyId);if(!key)return;
+  const w=world(p);
+  if(drag.mode==='keyframe'){key.x=w.x;key.y=w.y}
+  else{let angle=deg(Math.atan2(w.y-key.y,w.x-key.x));if(e.shiftKey)angle=Math.round(angle/15)*15;key.rotation=angle}
  }
  paint();
 }
@@ -525,15 +577,18 @@ function onUp(e){
  if(!pointers.has(e.pointerId))return;
  const wasMulti=pinch!==null;
  pointers.delete(e.pointerId);
+ clearTimeout(touchMoveTimer);touchMoveTimer=null;
  if(canvas?.isConnected&&canvas.hasPointerCapture(e.pointerId))canvas.releasePointerCapture(e.pointerId);
  if(pointers.size<2)pinch=null;
- // Never replace the canvas until the last finger has lifted.
  if(pointers.size>0)return;
  canvas?.classList.remove('panning');
- if(drag?.mode==='pending-place'&&!drag.changed&&e.type!=='pointercancel'&&!wasMulti){const tool=drag.tool,p=world(drag.start);drag=null;place(tool,p);return}
- if(drag?.changed&&['move','rotate','endpoint'].includes(drag.mode))save();
+ if(drag?.mode==='pending-place'&&!drag.changed&&e.type!=='pointercancel'&&!wasMulti){
+  const tool=drag.tool,p=world(drag.start);drag=null;place(tool,p);return;
+ }
+ if(drag?.changed&&drag.checkpointed)save();
  drag=null;render();
 }
+
 function wheel(e){e.preventDefault();const p=canvasPoint(e),old=world(p);ui.view.scale=clamp(ui.view.scale*Math.exp(-e.deltaY*.001),.14,4);ui.view.x=p.x-old.x*ui.view.scale;ui.view.y=p.y-old.y*ui.view.scale;paint()}
 function chooseBeat(id){stopPlayback();playback.elapsedMs=0;ui.beatId=id;if(ui.selection&&!stateOf()&&!detailsOf(ui.selection))ui.selection=null;render()}
 function addBeat(){stopPlayback();checkpoint();const b=M.nextBeat(scene(),beat());ui.beatId=b.id;save();render()}
