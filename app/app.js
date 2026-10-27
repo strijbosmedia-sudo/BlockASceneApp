@@ -1,12 +1,13 @@
 /* Block4Film v0.3 editor. Offline-first, mouse / pen / touch, no network dependencies. */
 (()=>{
 'use strict';
-const M=window.B4Model, P=window.B4Playback, MANUAL=window.B4Manual, splashStarted=performance.now(), app=document.getElementById('app'),fileInput=document.getElementById('backgroundFile'),projectInput=document.getElementById('projectFile');
+const M=window.B4Model, P=window.B4Playback, PREV=window.B4Previews||null, MANUAL=window.B4Manual, splashStarted=performance.now(), app=document.getElementById('app'),fileInput=document.getElementById('backgroundFile'),projectInput=document.getElementById('projectFile'),previewInput=document.getElementById('previewFile');
 const W=1100,H=700,clamp=(x,min,max)=>Math.max(min,Math.min(max,x)),rad=d=>d*Math.PI/180,deg=r=>r*180/Math.PI;
 const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const safe=v=>String(v||'scene').replace(/[^a-z0-9_-]+/gi,'-').slice(0,50)||'scene';
 let database={version:2,projects:[]};
-let ui={page:'editor',manualTab:'start',projectId:null,sceneId:null,beatId:null,selection:null,tool:'select',showMenu:false,showInspector:false,showLayers:false,showExportPanel:false,context:null,dialog:null,manualScroll:{},manualReturn:'workspace',layout:{layersPinned:false,propertiesPinned:false,layersSide:'right',propertiesSide:'right',layersWidth:290,propertiesWidth:300,layersFloatX:null,layersFloatY:null,propertiesFloatX:null,propertiesFloatY:null,layersFloatHeight:490,propertiesFloatHeight:510,timelineCollapsed:false},previousGhostMode:'adjacent',showCones:true,showPaths:true,showCameraMoves:true,ghostMode:'adjacent',view:{scale:.8,x:0,y:0},autoFit:true};
+let previewJobs=Promise.resolve();
+let ui={libraryFilter:'',librarySort:'recent',libraryView:'grid',previewDraft:undefined,page:'editor',manualTab:'start',projectId:null,sceneId:null,beatId:null,selection:null,tool:'select',showMenu:false,showInspector:false,showLayers:false,showExportPanel:false,context:null,dialog:null,manualScroll:{},manualReturn:'workspace',layout:{layersPinned:false,propertiesPinned:false,layersSide:'right',propertiesSide:'right',layersWidth:290,propertiesWidth:300,layersFloatX:null,layersFloatY:null,propertiesFloatX:null,propertiesFloatY:null,layersFloatHeight:490,propertiesFloatHeight:510,timelineCollapsed:false},previousGhostMode:'adjacent',showCones:true,showPaths:true,showCameraMoves:true,ghostMode:'adjacent',view:{scale:.8,x:0,y:0},autoFit:true};
 let canvas,wrap,ctx,drag=null,pointers=new Map(),pinch=null,saveTimer,undo=[],redo=[],images=new Map();
 let playback={playing:false,elapsedMs:0,startedAt:0,startIndex:0,raf:0,frame:null,exporting:false};
 const playbackOptions=()=>P.settings(project()?.playback);
@@ -46,13 +47,45 @@ function panelGrip(name){
  const m=panelMeta(name);
  return `<div class="panel-resizer ${m.pinned?'is-docked':'is-floating'}" data-resize-panel="${name}" data-side="${m.side}" title="Resize ${name} panel" aria-label="Resize ${name} panel"></div>`;
 }
-function save(){if(project())project().updatedAt=Date.now();clearTimeout(saveTimer);saveTimer=setTimeout(writeDB,350)}
+async function refreshPreviews(p){
+ if(!p||!PREV?.renderScene)return;
+ let changed=false;
+ for(const sc of p.scenes||[]){
+  const signature=PREV.signature(p,sc);
+  if(sc.autoPreview&&sc.autoPreviewSignature===signature)continue;
+  try{
+   const image=await PREV.renderScene(p,sc);
+   if(image){sc.autoPreview=image;sc.autoPreviewSignature=signature;changed=true}
+  }catch(err){console.warn('Preview rendering unavailable',err)}
+ }
+ if(changed){
+  for(const img of document.querySelectorAll?.('[data-preview-scene]')||[]){
+   const sc=p.scenes.find(x=>x.id===img.dataset.previewScene);
+   if(sc)img.src=PREV.previewForScene(sc);
+  }
+  for(const img of document.querySelectorAll?.('[data-preview-project]')||[]){
+   if(img.dataset.previewProject===p.id)img.src=PREV.previewForProject(p);
+  }
+ }
+ return changed;
+}
+function queuePreviews(p){
+ if(!p||!PREV?.renderScene)return Promise.resolve();
+ const job=previewJobs.then(async()=>{if(!database.projects.includes(p))return;const updated=await refreshPreviews(p);if(updated)await writeDB()});
+ previewJobs=job.catch(error=>console.warn('Preview update skipped',error));
+ return job;
+}
+function save(){
+ const p=project();if(p)p.updatedAt=Date.now();
+ clearTimeout(saveTimer);
+ saveTimer=setTimeout(async()=>{await writeDB();if(p)queuePreviews(p)},350);
+}
 function checkpoint(){if(!project())return;undo.push(M.clone(project()));if(undo.length>60)undo.shift();redo=[]}
 function replaceProject(snapshot){const i=database.projects.findIndex(p=>p.id===ui.projectId);if(i>=0)database.projects[i]=snapshot;ensureActive();render();save()}
 function undoAction(){if(!undo.length)return notice('No changes to undo');redo.push(M.clone(project()));replaceProject(undo.pop())}
 function redoAction(){if(!redo.length)return notice('No changes to redo');undo.push(M.clone(project()));replaceProject(redo.pop())}
 function ensureActive(){if(ui.projectId&&!project())ui.projectId=null;const p=project();if(!p)return;if(!p.scenes.find(s=>s.id===ui.sceneId))ui.sceneId=p.scenes[0]?.id||null;const s=scene();if(s&&!s.beats.some(b=>b.id===ui.beatId))ui.beatId=s.beats[0]?.id||null}
-function openProject(id){stopPlayback();ui.page='project';ui.showMenu=false;ui.projectId=id;ui.sceneId=null;ui.beatId=null;ui.selection=null;ui.showInspector=false;ui.autoFit=true;undo=[];redo=[];ensureActive();render()}
+function openProject(id){stopPlayback();ui.page='project';ui.showMenu=false;ui.projectId=id;ui.sceneId=null;ui.beatId=null;ui.selection=null;ui.showInspector=false;ui.autoFit=true;undo=[];redo=[];ensureActive();render();queuePreviews(project())}
 function home(){stopPlayback();ui.context=null;ui.dialog=null;ui.page='workspace';ui.projectId=null;ui.selection=null;ui.showInspector=false;ui.showLayers=false;ui.showMenu=false;render()}
 const ICONS={
  'menu':'<path d="M4 6h16M4 12h16M4 18h16"/>','home':'<path d="m3 10 9-7 9 7v10H3zM9 20v-7h6v7"/>',
@@ -108,7 +141,7 @@ function contextMenu(){
 function manageItem(kind,id,cmd){
  const p=project(),item=kind==='project'?database.projects.find(x=>x.id===id):kind==='scene'?p?.scenes.find(x=>x.id===id):kind==='set'?p?.sets.find(x=>x.id===id):null;
  if(!item)return;
- if(cmd==='edit'||cmd==='rename'){ui.dialog={kind:'edit-'+kind,id};ui.showMenu=false;render();return}
+ if(cmd==='edit'||cmd==='rename'){ui.previewDraft=undefined;ui.dialog={kind:'edit-'+kind,id};ui.showMenu=false;render();return}
  if(cmd==='open'){if(kind==='project')openProject(id);else if(kind==='scene')openScene(id);return}
  
  if(cmd==='duplicate'){checkpoint();const copy=M.clone(item);copy.id=M.uid();copy.name=item.name+' copy';if(kind==='project'){copy.updatedAt=Date.now();database.projects.push(copy)}else if(kind==='scene'){copy.beats.forEach(b=>b.id=M.uid());p.scenes.push(copy)}else{copy.objects.forEach(o=>o.id=M.uid());p.sets.push(copy)}save();render();return}
@@ -176,8 +209,15 @@ function modal(){
   const group=d.kind.endsWith('project')?'Project':d.kind.endsWith('scene')?'Scene':'Floor plan';
   const create=d.kind.startsWith('new-'),title=(create?'Create ':'Edit ')+group;
   const setPicker=group==='Scene'?`<label class="field"><span>Floor plan</span><select id="entityEditSet">${(p?.sets||[]).map(st=>`<option value="${esc(st.id)}" ${st.id===(item?.setId||scene()?.setId)?'selected':''}>${esc(st.name)}</option>`).join('')}</select></label>`:'';
+  const previewDetails=['edit-project','edit-scene'].includes(d.kind)?(()=>{
+   const automatic=d.kind==='edit-project'?PREV?.previewForScene?.(item?.scenes?.[0]):item?.autoPreview;
+   const chosen=ui.previewDraft===undefined?item?.customPreview:ui.previewDraft;
+   const image=chosen||automatic;
+   const mode=chosen?'Custom image':'Automatic · Beat 1';
+   return `<section class="preview-editor"><div class="preview-editor-heading"><strong>${group} preview image</strong><small>${mode}</small></div><div class="preview-editor-image">${image?`<img src="${esc(image)}" alt="${esc(group)} preview"/>`:`<div class="preview-empty">${iconMark('image')}<span>Beat 1 preview will appear after saving</span></div>`}</div><p class="help">Automatically generated from the saved first beat. An uploaded image stays until reset.</p><div class="preview-editor-actions"><button data-action="choose-preview-image">${iconMark('upload')} Choose image</button><button data-action="reset-preview-image">${iconMark('image')} Use automatic</button></div></section>`;
+  })():'';
   const floorDetails=d.kind==='edit-set'?`<label class="field"><span>Image opacity (%)</span><input type="number" min="5" max="100" step="5" id="entityEditOpacity" value="${Math.round((item?.opacity??.8)*100)}"/></label><label class="switch"><span>Darken imported image</span><input type="checkbox" id="entityEditDarken" ${item?.darken!==false?'checked':''}/></label><div class="set-dialog-actions"><button data-action="replace-set-background">Replace / import image</button><button data-action="clear-set-background">Remove image</button><small>${item?.background?'Image attached':'No image attached'}</small></div>`:'';
-  return `<div class="dialog-mask"><section class="dialog-card" role="dialog" aria-modal="true" aria-label="${esc(title)}"><header><h2>${esc(title)}</h2><button data-action="close-dialog" aria-label="Close">×</button></header><label class="field"><span>${esc(group)} name</span><input id="entityEditName" value="${esc(item?.name||(group==='Project'?'Untitled Film':group==='Scene'?'New scene':'New floor plan'))}" maxlength="100"/></label>${setPicker}${floorDetails}<div class="dialog-actions"><button data-action="close-dialog">Cancel</button><button class="dialog-confirm" data-action="save-entity-dialog">${create?'Create':'Save changes'}</button></div></section></div>`
+  return `<div class="dialog-mask"><section class="dialog-card" role="dialog" aria-modal="true" aria-label="${esc(title)}"><header><h2>${esc(title)}</h2><button data-action="close-dialog" aria-label="Close">×</button></header><label class="field"><span>${esc(group)} name</span><input id="entityEditName" value="${esc(item?.name||(group==='Project'?'Untitled Film':group==='Scene'?'New scene':'New floor plan'))}" maxlength="100"/></label>${setPicker}${floorDetails}${previewDetails}<div class="dialog-actions"><button data-action="close-dialog">Cancel</button><button class="dialog-confirm" data-action="save-entity-dialog">${create?'Create':'Save changes'}</button></div></section></div>`
  }
 
  if(d.kind==='edit-beat'){const b=scene()?.beats.find(x=>x.id===d.id);if(!b)return '';
@@ -383,20 +423,21 @@ function createSet(name){
  const p=project();if(!p)return;checkpoint();const obj={id:M.uid(),name,background:null,opacity:.8,darken:true,objects:[]};
  p.sets.push(obj);ui.showMenu=false;ui.dialog={kind:'edit-set',id:obj.id};save();render()
 }
-function openEditDialog(kind,id=null){ui.context=null;ui.showMenu=false;ui.dialog={kind,id};render()}
+function openEditDialog(kind,id=null){ui.context=null;ui.showMenu=false;ui.previewDraft=undefined;ui.dialog={kind,id};render()}
 function saveEntityDialog(){
  const d=ui.dialog;if(!d)return;const input=app.querySelector('#entityEditName'),name=input?.value.trim();
  if(!name){notice('Enter a name');input?.focus();return}
  const p=project();
- if(d.kind==='new-project'){const created=M.createProject(name);database.projects.push(created);ui.dialog=null;openProject(created.id);save();return}
+ if(d.kind==='new-project'){const created=M.createProject(name);database.projects.push(created);ui.dialog=null;ui.previewDraft=undefined;openProject(created.id);save();return}
  if(d.kind==='new-scene'){const setId=app.querySelector('#entityEditSet')?.value;createScene(name,setId);return}
  if(d.kind==='new-set'){ui.dialog=null;createSet(name);return}
  const item=d.kind==='edit-project'?database.projects.find(x=>x.id===d.id):d.kind==='edit-scene'?p?.scenes.find(x=>x.id===d.id):d.kind==='edit-set'?p?.sets.find(x=>x.id===d.id):null;
  if(!item){ui.dialog=null;render();return}
  checkpoint();item.name=name;
+ if(['edit-project','edit-scene'].includes(d.kind)&&ui.previewDraft!==undefined)item.customPreview=ui.previewDraft||null;
  if(d.kind==='edit-scene'){const setId=app.querySelector('#entityEditSet')?.value;if(p.sets.some(x=>x.id===setId))item.setId=setId}
  if(d.kind==='edit-set'){const opacity=Number(app.querySelector('#entityEditOpacity')?.value);if(Number.isFinite(opacity))item.opacity=clamp(opacity/100,.05,1);item.darken=!!app.querySelector('#entityEditDarken')?.checked}
- ui.dialog=null;save();render();notice('Changes saved')
+ ui.dialog=null;ui.previewDraft=undefined;save();render();notice('Changes saved')
 }
 
 function download(blob,name){const u=URL.createObjectURL(blob),link=document.createElement('a');link.href=u;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),30000)}
@@ -412,12 +453,12 @@ async function saveVideo(){if(playback.exporting)return;await waitBackdrop();if(
  try{rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:3_000_000});const done=new Promise((resolve,reject)=>{rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};rec.onstop=resolve;rec.onerror=reject});rec.start(1000);notice(`Recording ${config.speed}× · ${(duration/1000).toFixed(1)}s · ${config.mode}`);const started=performance.now();while(performance.now()-started<duration){const elapsed=performance.now()-started,frame=P.frameAt(beats,elapsed,config);draw(g,c.width,c.height,{export:true,frame,mode:config.mode,ghost:exportPrefs().videoGhosts,cones:exportPrefs().cones,paths:exportPrefs().paths});await new Promise(requestAnimationFrame)}draw(g,c.width,c.height,{export:true,frame:P.frameAt(beats,duration,config),mode:config.mode,ghost:exportPrefs().videoGhosts,cones:exportPrefs().cones,paths:exportPrefs().paths});await new Promise(resolve=>setTimeout(resolve,150));rec.stop();await done;const blob=new Blob(chunks,{type:mime});if(blob.size===0)throw Error('Encoder created an empty file');download(blob,`${safe(projectName)}-${safe(title)}-animated-${config.speed}x.webm`);notice('Animated WebM exported')}catch(err){failed=true;console.error('Video export failed',err);notice('Video export failed: '+(err.message||'Unknown error'))}finally{if(rec?.state==='recording')rec.stop();stream.getTracks().forEach(t=>t.stop());playback.exporting=false;if(!failed)paint()}}
 
 function backup(){download(new Blob([JSON.stringify({format:'blockascene',version:2,project:project()},null,2)],{type:'application/json'}),`${safe(project().name)}.blockascene`);notice('Project backup exported')}
-async function importProject(file){try{const raw=JSON.parse(await file.text()),p=M.migrate(raw.project||raw);if(database.projects.some(x=>x.id===p.id))p.id=M.uid();database.projects.push(p);openProject(p.id);save();notice('Project imported')}catch(e){notice('Import failed: '+e.message)}}
+async function importProject(file){try{const raw=JSON.parse(await file.text()),p=M.migrate(raw.project||raw);if(database.projects.some(x=>x.id===p.id))p.id=M.uid();database.projects.push(p);openProject(p.id);save();queuePreviews(p);notice('Project imported')}catch(e){notice('Import failed: '+e.message)}}
 async function importBackground(file){if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type))return notice('Use PNG, JPG, or WebP');if(file.size>12e6)return notice('Choose an image under 12 MB');const reader=new FileReader();reader.onload=()=>{const target=ui.dialog?.kind==='edit-set'?project()?.sets.find(x=>x.id===ui.dialog.id):set();if(!target)return;checkpoint();target.background=reader.result;target.opacity=.8;target.darken=true;images.clear();if(ui.dialog?.kind!=='edit-set'){ui.selection={type:'background'};ui.showInspector=true}save();render();notice('Floor plan imported')};reader.readAsDataURL(file)}
 async function action(e){const target=e.target.closest('[data-action]');if(!target)return;e.preventDefault();e.stopPropagation();const a=target.dataset.action,id=target.dataset.id;if(a==='open-manual'){stopPlayback();ui.manualReturn=ui.page;ui.page='manual';ui.manualTab='start';ui.manualScroll={};ui.showMenu=false;ui.showLayers=false;ui.showExportPanel=false;render();return}if(a==='close-manual'){ui.page=ui.manualReturn||'workspace';render();return}if(a==='manual-tab'){const el=app.querySelector('.manual-content');if(el)ui.manualScroll[ui.manualTab]=el.scrollTop;ui.manualTab=target.dataset.tab||'start';render();return}if(a==='toggle-playback'){togglePlayback();return}if(playback.playing){playback.elapsedMs=elapsedPlayback();stopPlayback();}
  if(a==='new-project'){openEditDialog('new-project')}
  else if(a==='open-project')openProject(id);else if(a==='home')home();else if(a==='all-scenes'){stopPlayback();ui.page='project';ui.showMenu=false;render()}else if(a==='choose-scene')openScene(id);else if(a==='open-context'){const rect=target.getBoundingClientRect();openContext(target.dataset.kind,id,rect.right-210,rect.bottom+4)}else if(a==='close-context'){ui.context=null;render()}else if(a==='context-action'){const c=ui.context;ui.context=null;if(c){if(c.kind==='beat')beatCommand(c.id,target.dataset.command);else manageItem(c.kind,c.id,target.dataset.command)}}
- else if(a==='toggle-menu'){ui.showMenu=!ui.showMenu;render()}else if(a==='toggle-editor-ghosts'){if(ui.ghostMode==='off')ui.ghostMode=ui.previousGhostMode||'adjacent';else{ui.previousGhostMode=ui.ghostMode;ui.ghostMode='off'}render()}else if(a==='toggle-layers'){ui.showLayers=!ui.showLayers;ui.showExportPanel=false;if(ui.showLayers&&window.innerWidth<850)ui.showInspector=false;render()}else if(a==='toggle-inspector'){if(!ui.selection)ui.selection={type:'background'};ui.showInspector=!ui.showInspector;if(ui.showInspector&&window.innerWidth<850)ui.showLayers=false;render()}else if(a==='toggle-pin'){const key=target.dataset.panel==='layers'?'layersPinned':'propertiesPinned';ui.layout[key]=!ui.layout[key];saveLayout();render()}else if(a==='switch-panel-side'){const p=target.dataset.panel==='layers'?'layers':'properties';ui.layout[p+'Side']=ui.layout[p+'Side']==='left'?'right':'left';ui.layout[p+'FloatX']=null;ui.layout[p+'FloatY']=null;saveLayout();render()}else if(a==='reset-layout'){ui.layout=defaultLayout();saveLayout();render()}else if(a==='toggle-timeline'){ui.layout.timelineCollapsed=!ui.layout.timelineCollapsed;saveLayout();render()}else if(a==='toggle-export-panel'){ui.showExportPanel=!ui.showExportPanel;ui.showLayers=false;render()}else if(a==='close-inspector'){ui.showInspector=false;render()}else if(a==='close-dialog'){ui.dialog=null;ui.videoDraft=null;render()}else if(a==='save-entity-dialog'){saveEntityDialog()}else if(a==='replace-set-background'){fileInput.click()}else if(a==='clear-set-background'){const st=project()?.sets.find(s=>s.id===ui.dialog?.id);if(st){checkpoint();st.background=null;images.clear();save();render();notice('Floor plan image removed')}}else if(a==='reset-beat-duration'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){checkpoint();delete b.holdMs;ui.dialog=null;save();render()}}else if(a==='save-beat-dialog'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){const name=app.querySelector('#beatEditName').value.trim(),secs=Number(app.querySelector('#beatEditHold').value);if(!name||!Number.isFinite(secs)||secs<.5||secs>30)return notice('Enter a name and duration between 0.5 and 30 seconds');checkpoint();b.name=name;b.holdMs=Math.round(secs*1000);ui.dialog=null;save();render()}}
+ else if(a==='toggle-menu'){ui.showMenu=!ui.showMenu;render()}else if(a==='toggle-editor-ghosts'){if(ui.ghostMode==='off')ui.ghostMode=ui.previousGhostMode||'adjacent';else{ui.previousGhostMode=ui.ghostMode;ui.ghostMode='off'}render()}else if(a==='toggle-layers'){ui.showLayers=!ui.showLayers;ui.showExportPanel=false;if(ui.showLayers&&window.innerWidth<850)ui.showInspector=false;render()}else if(a==='toggle-inspector'){if(!ui.selection)ui.selection={type:'background'};ui.showInspector=!ui.showInspector;if(ui.showInspector&&window.innerWidth<850)ui.showLayers=false;render()}else if(a==='toggle-pin'){const key=target.dataset.panel==='layers'?'layersPinned':'propertiesPinned';ui.layout[key]=!ui.layout[key];saveLayout();render()}else if(a==='switch-panel-side'){const p=target.dataset.panel==='layers'?'layers':'properties';ui.layout[p+'Side']=ui.layout[p+'Side']==='left'?'right':'left';ui.layout[p+'FloatX']=null;ui.layout[p+'FloatY']=null;saveLayout();render()}else if(a==='reset-layout'){ui.layout=defaultLayout();saveLayout();render()}else if(a==='toggle-timeline'){ui.layout.timelineCollapsed=!ui.layout.timelineCollapsed;saveLayout();render()}else if(a==='toggle-export-panel'){ui.showExportPanel=!ui.showExportPanel;ui.showLayers=false;render()}else if(a==='close-inspector'){ui.showInspector=false;render()}else if(a==='close-dialog'){ui.dialog=null;ui.videoDraft=null;ui.previewDraft=undefined;render()}else if(a==='save-entity-dialog'){saveEntityDialog()}else if(a==='choose-preview-image'){previewInput?.click()}else if(a==='reset-preview-image'){ui.previewDraft='';render()}else if(a==='replace-set-background'){fileInput.click()}else if(a==='clear-set-background'){const st=project()?.sets.find(s=>s.id===ui.dialog?.id);if(st){checkpoint();st.background=null;images.clear();save();render();notice('Floor plan image removed')}}else if(a==='reset-beat-duration'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){checkpoint();delete b.holdMs;ui.dialog=null;save();render()}}else if(a==='save-beat-dialog'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){const name=app.querySelector('#beatEditName').value.trim(),secs=Number(app.querySelector('#beatEditHold').value);if(!name||!Number.isFinite(secs)||secs<.5||secs>30)return notice('Enter a name and duration between 0.5 and 30 seconds');checkpoint();b.name=name;b.holdMs=Math.round(secs*1000);ui.dialog=null;save();render()}}
  else if(a==='undo')undoAction();else if(a==='redo')redoAction();else if(a==='tool'){ui.tool=target.dataset.tool||'select';render()}else if(a==='toggle-equipment'){ui.tool=ui.tool==='equipment'?'select':'equipment';render()}else if(a==='place-equipment'){ui.tool='equip:'+target.dataset.shape;render()}
  else if(a==='choose-set'){checkpoint();scene().setId=id;ui.showMenu=false;ui.selection=null;save();render()}
  else if(a==='new-scene')openEditDialog('new-scene');else if(a==='new-set')openEditDialog('new-set');else if(a==='choose-beat')chooseBeat(id);else if(a==='add-beat')addBeat();
@@ -427,7 +468,7 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
  else if(a==='delete-beat'){if(scene().beats.length===1)return notice('A scene needs at least one beat');if(confirm('Delete this beat?')){checkpoint();const list=scene().beats,i=list.findIndex(b=>b.id===ui.beatId);list.splice(i,1);ui.beatId=list[Math.max(0,i-1)].id;ui.selection=null;save();render()}}
  else if(a==='quick-color'){edit('itemColor',target.dataset.color)}else if(a==='delete-selection')removeSelection();
  else if(a==='import-bg')fileInput.click();else if(a==='import-project')projectInput.click();else if(a==='select-bg'){ui.selection={type:'background'};ui.showInspector=true;ui.showMenu=false;render()}
- else if(a==='clear-bg'){checkpoint();set().background=null;images.clear();save();render()}else if(a==='export-image')await savePNG();else if(a==='export-zip')await saveZIP();else if(a==='export-video-dialog'){ui.showExportPanel=false;ui.videoDraft={...playbackOptions()};ui.dialog={kind:'video'};render()}else if(a==='confirm-video-export'){const c=ui.videoDraft||playbackOptions();project().playback=P.settings({...playbackOptions(),speed:Number(c.speed),holdMs:Number(c.holdMs),mode:c.mode});ui.videoDraft=null;ui.dialog=null;save();render();await saveVideo()}else if(a==='export-video')await saveVideo();else if(a==='save-project'){clearTimeout(saveTimer);await writeDB();notice('Project saved locally')}else if(a==='backup')backup()}
+ else if(a==='clear-bg'){checkpoint();set().background=null;images.clear();save();render()}else if(a==='export-image')await savePNG();else if(a==='export-zip')await saveZIP();else if(a==='export-video-dialog'){ui.showExportPanel=false;ui.videoDraft={...playbackOptions()};ui.dialog={kind:'video'};render()}else if(a==='confirm-video-export'){const c=ui.videoDraft||playbackOptions();project().playback=P.settings({...playbackOptions(),speed:Number(c.speed),holdMs:Number(c.holdMs),mode:c.mode});ui.videoDraft=null;ui.dialog=null;save();render();await saveVideo()}else if(a==='export-video')await saveVideo();else if(a==='save-project'){clearTimeout(saveTimer);await writeDB();await queuePreviews(project());notice('Project saved locally')}else if(a==='backup')backup()}
 app.addEventListener('click',action);
 app.addEventListener('scroll',e=>{if(ui.page==='manual'&&e.target?.classList?.contains('manual-content'))ui.manualScroll[ui.manualTab]=e.target.scrollTop},true);
 let panelPointer=null;
@@ -503,7 +544,27 @@ app.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('.projec
 window.addEventListener('keydown',e=>{if(ui.page==='manual'){if(e.key==='Escape'){ui.page=ui.manualReturn||'workspace';render()}return}if(e.target.closest?.('input,select,textarea'))return;if(e.code==='Space'&&scene()){e.preventDefault();togglePlayback();return}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redoAction():undoAction()}else if(['Delete','Backspace'].includes(e.key)&&ui.selection&&ui.selection.type!=='background'){e.preventDefault();removeSelection()}else if(e.key==='Escape'){ui.selection=null;ui.showInspector=false;ui.tool='select';render()}else if(e.key==='ArrowRight'&&scene()){const i=scene().beats.findIndex(b=>b.id===ui.beatId);chooseBeat(scene().beats[Math.min(scene().beats.length-1,i+1)].id)}else if(e.key==='ArrowLeft'&&scene()){const i=scene().beats.findIndex(b=>b.id===ui.beatId);chooseBeat(scene().beats[Math.max(0,i-1)].id)}});
 fileInput.addEventListener('change',async()=>{if(fileInput.files[0])await importBackground(fileInput.files[0]);fileInput.value=''});
 projectInput.addEventListener('change',async()=>{if(projectInput.files[0])await importProject(projectInput.files[0]);projectInput.value=''});
+previewInput?.addEventListener('change',async()=>{
+ const file=previewInput.files?.[0];previewInput.value='';
+ if(!file)return;
+ if(!['image/png','image/jpeg','image/webp'].includes(file.type)||file.size>12e6)return notice('Use PNG, JPG or WebP under 12 MB');
+ const oldKind=ui.dialog?.kind,oldId=ui.dialog?.id;
+ try{
+  const src=URL.createObjectURL(file),image=new Image();
+  try{
+   await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(new Error('Could not load image'));image.src=src});
+  }finally{URL.revokeObjectURL(src)}
+  const canvas=document.createElement('canvas');canvas.width=720;canvas.height=450;
+  const g=canvas.getContext('2d');g.fillStyle='#14161b';g.fillRect(0,0,720,450);
+  const scale=Math.max(720/image.naturalWidth,450/image.naturalHeight);
+  const w=image.naturalWidth*scale,h=image.naturalHeight*scale;
+  g.drawImage(image,(720-w)/2,(450-h)/2,w,h);
+  if(ui.dialog?.kind!==oldKind||ui.dialog?.id!==oldId)return;
+  ui.previewDraft=canvas.toDataURL('image/jpeg',.8);
+  render();
+ }catch(error){notice('Preview image failed: '+error.message)}
+});
 window.addEventListener('resize',()=>{if(canvas?.isConnected){fitView();paint()}});
 function finishSplash(){const splash=document.getElementById('startupSplash');if(!splash)return;setTimeout(()=>{splash.classList.add('dismissed');splash.addEventListener('transitionend',()=>splash.remove(),{once:true})},Math.max(0,1750-(performance.now()-splashStarted)))}
-(async()=>{try{const layout=JSON.parse(localStorage.getItem('Block4Film-v11-layout')||'null');if(layout&&typeof layout==='object')ui.layout={...ui.layout,...layout}}catch{}const saved=await loadDB();if(saved?.projects&&Array.isArray(saved.projects)){const migrated=[];for(const p of saved.projects){try{migrated.push(M.migrate(p))}catch(e){console.error('Project migration failed; original saved copy preserved.',e)}}if(migrated.length===saved.projects.length){database={version:2,projects:migrated};await writeDB()}else{database={version:2,projects:[M.createProject('Demo Film')]};notice('Could not upgrade all projects. Export your old backups.')}}else{database.projects=[M.createProject('Demo Film')];await writeDB()}render();finishSplash()})();
+(async()=>{try{const layout=JSON.parse(localStorage.getItem('Block4Film-v11-layout')||'null');if(layout&&typeof layout==='object')ui.layout={...ui.layout,...layout}}catch{}const saved=await loadDB();if(saved?.projects&&Array.isArray(saved.projects)){const migrated=[];for(const p of saved.projects){try{migrated.push(M.migrate(p))}catch(e){console.error('Project migration failed; original saved copy preserved.',e)}}if(migrated.length===saved.projects.length){database={version:2,projects:migrated};await writeDB()}else{database={version:2,projects:[M.createProject('Demo Film')]};notice('Could not upgrade all projects. Export your old backups.')}}else{database.projects=[M.createProject('Demo Film')];await writeDB()}render();finishSplash();for(const p of database.projects)queuePreviews(p)})();
 })();
