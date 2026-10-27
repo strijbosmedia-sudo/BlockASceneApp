@@ -152,3 +152,7 @@ See [layout and focus fixes](docs/V112-POLISH.md). The visual redesign comes nex
 ## Stage 2 redesign
 
 The v1.2.0 beta implements the charcoal visual system, workspace/scene libraries, Beat 1 previews, custom cover uploads, editor refinement and consistent dialogs. See [Stage 2 redesign notes](docs/V12-REDESIGN.md). Prior Windows releases remain available.
+
+## v1.2.1 polishing update
+
+See [the v1.2.1 functionality and layout notes](docs/V121-POLISH.md). The v1.2.0 visual baseline remains unchanged.

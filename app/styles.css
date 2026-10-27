@@ -592,3 +592,33 @@ input:hover,select:hover{border-color:#676b75}
  .dialog-card{max-height:calc(100vh - 32px)}
  .preview-editor-image{aspect-ratio:16/9}
 }
+
+/* v1.2.1: Workspace grid adapts smoothly instead of forcing two undersized
+   cards at narrow widths. Scene cards and library list-view are unchanged. */
+.workspace-library{min-width:0}
+.workspace-library .project-grid:not(.list-view){
+ grid-template-columns:repeat(auto-fill,minmax(min(100%,225px),1fr));
+ width:100%;max-width:100%;min-width:0;align-items:stretch;
+ column-gap:clamp(10px,1.8vw,18px);row-gap:clamp(10px,1.8vw,18px)
+}
+.workspace-library .project-grid:not(.list-view)>.project-tile{
+ min-width:0;min-height:0;max-width:100%;width:100%;height:auto;aspect-ratio:1;box-sizing:border-box
+}
+.workspace-library .project-grid:not(.list-view) .tile-info{min-width:0}
+.workspace-library .project-grid:not(.list-view) .tile-info>strong,
+.workspace-library .project-grid:not(.list-view) .tile-info>small{min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:650px){
+ .workspace-library .project-grid:not(.list-view){
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr))
+ }
+}
+@media(max-width:500px){
+ .workspace-library .project-grid:not(.list-view){grid-template-columns:minmax(0,1fr)}
+ .workspace-library .project-grid:not(.list-view)>.project-tile{max-width:380px}
+}
+.back-nav{display:inline-flex;align-items:center;gap:6px;border-color:#343840;background:#22252a;color:#d9dce2}
+.back-nav .b4-icon{width:17px;height:17px}
+.back-nav:hover:not(:disabled){background:#33363d;color:#f3f4f6}
+.back-nav:disabled{opacity:.36;cursor:default;pointer-events:none}
+.identity-number-field select{min-width:125px;max-width:210px}
+.identity-number-field>small{display:block;margin-top:5px;color:#9296a1;font-size:11px;line-height:1.4}
