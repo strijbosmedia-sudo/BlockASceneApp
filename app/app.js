@@ -528,7 +528,17 @@ function saveEntityDialog(){
  ui.dialog=null;ui.previewDraft=undefined;save();render();notice('Changes saved')
 }
 
-function download(blob,name){const u=URL.createObjectURL(blob),link=document.createElement('a');link.href=u;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),30000)}
+function download(blob,name){
+ if(window.Capacitor?.isNativePlatform?.()){
+  if(!window.Block4FilmMobile?.saveFile){notice('Native export is not available on this device');return}
+  window.Block4FilmMobile.saveFile(blob,name).catch(error=>{
+   console.error('Block4Film mobile export failed',error);
+   notice('Could not share export. Check storage permissions and available space.');
+  });
+  return;
+ }
+ const u=URL.createObjectURL(blob),link=document.createElement('a');link.href=u;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),30000)
+}
 function exportCanvas(bid,width=1600,height=1050){const c=document.createElement('canvas');c.width=width;c.height=height;draw(c.getContext('2d'),width,height,{beatId:bid,export:true,ghost:exportPrefs().imageGhosts,paths:exportPrefs().paths,cones:exportPrefs().cones});return c}
 const pngBlob=c=>new Promise(resolve=>c.toBlob(resolve,'image/png'));
 async function waitBackdrop(){const src=set()?.background;if(!src||cached(src))return;await new Promise(resolve=>{const start=Date.now();const t=setInterval(()=>{if(cached(src)||Date.now()-start>3000){clearInterval(t);resolve()}},60)})}
