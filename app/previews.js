@@ -52,7 +52,7 @@ async function renderScene(project,scene,environment={}){
  g.save();g.translate((WIDTH-W*scale)/2,(HEIGHT-H*scale)/2);g.scale(scale,scale);
  const location=project.sets?.find(st=>st.id===scene.setId);
  const img=await loadImage(location?.background,ImageType);
- if(img){g.save();g.globalAlpha=location.opacity??.75;g.filter=location.darken===false?'none':'brightness(.60) contrast(1.15)';g.drawImage(img,0,0,W,H);g.restore()}
+ if(img){const iw=img.naturalWidth||img.width,ih=img.naturalHeight||img.height,scale=Math.max(.25,Math.min(3,Number(location?.backgroundScale)||1));if(iw>0&&ih>0){const factor=Math.min(W*.92/iw,H*.92/ih)*scale,w=iw*factor,h=ih*factor;g.save();g.globalAlpha=location.opacity??.75;g.filter=location.darken===false?'none':'brightness(.60) contrast(1.15)';g.drawImage(img,(W-w)/2,(H-h)/2,w,h);g.restore()}}
  else{
   g.strokeStyle='#252932';g.lineWidth=1;
   for(let x=0;x<W;x+=55){g.beginPath();g.moveTo(x,0);g.lineTo(x,H);g.stroke()}

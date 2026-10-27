@@ -1,0 +1,113 @@
+const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
+const M=require('../app/model.js'),P=require('../app/playback.js'),root=path.resolve(__dirname,'..');
+const near=(v,w)=>assert.ok(Math.abs(v-w)<.001, 'Expected '+v+' to equal '+w);
+for(const [w,h] of [[2800,1400],[900,1800],[1000,1000],[3840,2160]]){
+ const fit=M.backgroundFit(w,h,1100,700);
+ near(fit.width/fit.height,w/h);
+ assert.ok(fit.width<=1100&&fit.height<=700);
+ const double=M.backgroundFit(w,h,1100,700,2);
+ near(double.width,fit.width*2);near(double.height,fit.height*2);
+ near(double.x,(1100-double.width)/2);
+}
+assert.equal(M.backgroundFit(0,400),null);
+assert.equal(M.backgroundFit(100,200,1100,700,.01).width, M.backgroundFit(100,200,1100,700,.25).width);
+assert.match(M.kelvinToHex(2800),/^#[0-9A-F]{6}$/);
+assert.notEqual(M.kelvinToHex(2800),M.kelvinToHex(10000));
+const project=M.createProject('Set props');
+project.sets[0].backgroundScale=2;
+const sc=project.scenes[0],beat=sc.beats[0],cam=sc.cameras[0];
+const e=M.addIdentity(project,sc,'equipment',beat,{x:200,y:250},'light');
+assert.equal(e.lightMode,'kelvin');assert.equal(e.lightKelvin,5600);
+assert.equal(e.lightModifier,undefined);
+const newCam=M.addIdentity(project,sc,'camera',beat,{x:370,y:250});
+assert.equal(beat.cameras[newCam.id].coneRange,365);
+const migrated=M.migrate(project);
+assert.equal(migrated.sets[0].backgroundScale,2);
+assert.equal(migrated.scenes[0].equipment.find(v=>v.id===e.id).lightMode,'kelvin');
+const old=M.clone(project);
+delete old.sets[0].backgroundScale;
+old.scenes[0].equipment[0].lightMode=undefined;
+assert.equal(M.migrate(old).sets[0].backgroundScale,1);
+assert.equal(M.migrate(old).scenes[0].equipment[0].lightMode,'kelvin');
+
+const app={innerHTML:'',addEventListener(){},querySelector(){return null},querySelectorAll(){return []}};
+const fake={addEventListener(){},click(){}},toast={textContent:'',classList:{add(){},remove(){}}};
+const document={getElementById(id){return id==='app'?app:id==='toast'?toast:fake},querySelector(){return null},querySelectorAll(){return []},
+ get activeElement(){return null}};
+const win={B4Model:M,B4Playback:P,B4Previews:null,B4Manual:[],innerWidth:1300,addEventListener(){}};
+let timer=0;const sandbox={document,window:win,performance:{now:()=>0},localStorage:{getItem(){return null},setItem(){}},
+ indexedDB:{open(){throw Error('no test storage')}},console,setTimeout(){return ++timer},clearTimeout(){},
+ Date,Math,Map,Set,devicePixelRatio:1};
+sandbox.globalThis=sandbox;
+let source=fs.readFileSync(path.join(root,'app','app.js'),'utf8');
+source=source.replace('function render(){','function render(){return;');
+source=source.replace('function paint(){','function paint(){return;');
+source=source.replace('(async()=>{try{const layout=','(async()=>{return;try{const layout=');
+const tail=source.lastIndexOf('})();');assert.ok(tail>0);
+source=source.slice(0,tail)+'globalThis.__v140={ui,database,place,edit,inspector,editor,modal,setResizeHandle,setContainsPoint,hitAt,onDown,onMove,onUp,setCanvas(el){canvas=el},getDrag(){return drag}};\n'+source.slice(tail);
+vm.runInNewContext(source,sandbox);
+const v=sandbox.__v140;
+v.database.projects=[project];v.ui.projectId=project.id;v.ui.sceneId=sc.id;v.ui.beatId=beat.id;v.ui.page='editor';
+v.ui.view={scale:1,x:0,y:0};v.ui.tool='select';v.ui.showInspector=true;v.ui.showCones=true;
+const set=project.sets[0];
+for(const kind of ['wall','window','door','furniture']){
+ v.place(kind,{x:400,y:470});
+ const obj=set.objects.at(-1);
+ assert.equal(obj.type,kind);
+ v.ui.selection={type:'setobj',id:obj.id};
+ const html=v.inspector();
+ assert.match(html,kind==='furniture'?/name="setWidth"/:/name="setLength"/);
+ assert.match(html,kind==='furniture'?/name="setHeight"/:/far endpoint/);
+ assert.equal(v.hitAt(v.setResizeHandle(obj)).type,'set-resize');
+ v.edit(kind==='furniture'?'setWidth':'setLength','233');
+ assert.equal(obj.w,233);
+ if(kind==='furniture'){v.edit('setHeight','95');assert.equal(obj.h,95)}
+}
+v.ui.tool='structure';const editor=v.editor();assert.match(editor,/Add structural element/);
+assert.match(editor,/data-shape="wall"/);assert.match(editor,/data-shape="window"/);
+assert.match(editor,/data-action="toggle-structure"/);
+v.ui.dialog={kind:'edit-set',id:set.id};const dialog=v.modal();
+assert.match(dialog,/id="entityEditScale"/);
+assert.match(dialog,/value="200"/);v.ui.dialog=null;
+v.ui.selection={type:'background'};assert.match(v.inspector(),/name="backgroundScale"/);
+v.edit('backgroundScale','150');near(set.backgroundScale,1.5);
+v.ui.selection={type:'equipment',id:e.id};
+assert.match(v.inspector(),/name="lightModifier"/);
+assert.match(v.inspector(),/Daylight \/ Kelvin/);
+v.edit('lightModifier','softbox');v.edit('softboxSize','large');
+assert.match(v.inspector(),/Softbox size/);
+v.edit('lightMode','color');v.edit('lightColor','#FF0044');
+assert.match(v.inspector(),/Choose light color/);
+assert.equal(e.lightColor,'#FF0044');assert.equal(e.softboxSize,'large');
+v.edit('lightMode','kelvin');v.edit('lightKelvin','3200');
+assert.equal(e.lightKelvin,3200);
+assert.match(v.inspector(),/Warm ↔ Cool/);
+v.edit('lightModifier','spot');assert.equal(e.lightModifier,'spot');
+v.ui.selection={type:'camera',id:newCam.id};
+assert.match(v.inspector(),/name="coneRange"/);
+v.edit('coneRange','470');assert.equal(beat.cameras[newCam.id].coneRange,470);
+const state=beat.cameras[newCam.id],angle=state.rotation*Math.PI/180;
+const hit={x:state.x+state.coneRange*Math.cos(angle),y:state.y+state.coneRange*Math.sin(angle)};
+assert.equal(v.hitAt(hit).type,'cone-range');
+const captures=new Set(),canvas={getBoundingClientRect(){return{left:0,top:0}},setPointerCapture(id){captures.add(id)},hasPointerCapture(id){return captures.has(id)},
+ releasePointerCapture(id){captures.delete(id)},classList:{add(){},remove(){}},isConnected:true};
+v.setCanvas(canvas);
+const evt=(x,y,id=42)=>({clientX:x,clientY:y,pointerId:id,pointerType:'pen',button:0,preventDefault(){},type:'pointerup'});
+v.onDown(evt(hit.x,hit.y));assert.equal(v.getDrag().mode,'cone-range');
+v.onMove(evt(hit.x+100*Math.cos(angle),hit.y+100*Math.sin(angle)));v.onUp(evt(hit.x,hit.y));
+assert.ok(state.coneRange>550);
+const wall=set.objects.find(o=>o.type==='wall');
+v.ui.selection={type:'setobj',id:wall.id};
+const handle=v.setResizeHandle(wall);
+v.onDown(evt(handle.x,handle.y));assert.equal(v.getDrag().mode,'set-resize');
+v.onMove(evt(handle.x+80,handle.y));v.onUp(evt(handle.x+80,handle.y));
+assert.equal(wall.w,313);
+const appcode=fs.readFileSync(path.join(root,'app','app.js'),'utf8');
+const previews=fs.readFileSync(path.join(root,'app','previews.js'),'utf8');
+assert.match(appcode,/M\.backgroundFit\(bg\.naturalWidth/);
+assert.match(previews,/location\?\.backgroundScale/);
+const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+assert.equal(pkg.version,'1.4.0');
+assert.match(pkg.scripts['mobile:android'],/scripts\/brand-android\.cjs/);
+assert.match(fs.readFileSync(path.join(root,'scripts/brand-android.cjs'),'utf8'),/viewBox="47 50 282 287"/);
+console.log('Block4Film v1.4.0 floor aspect, scale, structure resizing, light modes, cone dragging, Android icon pipeline passed');

@@ -160,3 +160,7 @@ See [the v1.2.1 functionality and layout notes](docs/V121-POLISH.md). The v1.2.0
 ## Version 1.3 and platform builds
 
 Windows is the approved release baseline. macOS/Android/iOS preliminary packages and the Windows code-signing configuration are described in [Cross-platform build guide](docs/V13-PLATFORMS.md).
+
+## Block4Film v1.4.0: scene production toolkit
+
+Aspect-preserving floor plans with editable scale, resizable walls, windows, doors and furniture, adjustable camera cone reach, and modular lighting with Kelvin/color and softbox/spot modifiers. Android launcher artwork uses the cropped Block4Film icon. See [the v1.4.0 release notes](docs/V140-SCENE-TOOLS.md). Android tablets currently use a test-signed, clearly named APK until a persistent release signing key is added.

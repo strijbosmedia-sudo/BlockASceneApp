@@ -1,6 +1,6 @@
 {
   "name": "blockascene",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "private": true,
   "description": "Block4Film offline-first scene blocking studio for Windows, macOS, Android and iOS",
   "main": "desktop/main.cjs",
@@ -9,11 +9,11 @@
   "scripts": {
     "start": "npm run icons && electron .",
     "dist:win": "npm run icons && electron-builder --win portable --x64 --publish never",
-    "test:model": "node tests/model.test.cjs && node tests/playback.test.cjs && node tests/manual.test.cjs && node tests/ui-v11.test.cjs && node tests/ui-v111.test.cjs && node tests/ui-v112.test.cjs && node tests/redesign-v2.test.cjs && node tests/ui-v121.test.cjs && node tests/portability-v13.test.cjs && node tests/motion-v131.test.cjs && node tests/tablet-v132.test.cjs",
+    "test:model": "node tests/model.test.cjs && node tests/playback.test.cjs && node tests/manual.test.cjs && node tests/ui-v11.test.cjs && node tests/ui-v111.test.cjs && node tests/ui-v112.test.cjs && node tests/redesign-v2.test.cjs && node tests/ui-v121.test.cjs && node tests/portability-v13.test.cjs && node tests/motion-v131.test.cjs && node tests/tablet-v132.test.cjs && node tests/v140-set-and-lights.test.cjs",
     "icons": "node scripts/build-icons.cjs",
     "dist:mac": "npm run icons && node scripts/build-mac-icon.cjs && electron-builder --mac dmg zip --x64 --arm64 --publish never",
     "mobile:prepare": "node scripts/prepare-mobile.cjs",
-    "mobile:android": "npm run mobile:prepare && npx cap add android && npx cap sync android",
+    "mobile:android": "npm run mobile:prepare && npx cap add android && npx cap sync android && node scripts/brand-android.cjs",
     "mobile:ios": "npm run mobile:prepare && npx cap add ios && npx cap sync ios"
   },
   "devDependencies": {
