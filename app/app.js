@@ -260,7 +260,7 @@ function inspector(){
    content+=`<div class="divider"></div>${option('Motion path','motionPath',[['linear','Straight segments'],['smooth','Smooth curves']],motion.pathType||'linear')}
     <div class="keyframe-head"><strong>Movement keyframes</strong>${btn('add-motion-keyframe','+','Add keyframe','small')}</div>
     <p class="help">Drag keyframe diamonds to bend the path. Adjust timing and direction for turns and pans.</p>
-    ${keys.map((k,i)=>`<div class="keyframe-row"><div class="keyframe-head"><b>Keyframe ${i+1}</b><button data-action="remove-motion-keyframe" data-id="${esc(k.id)}" aria-label="Remove keyframe ${i+1}">×</button></div>
+    <div class="motion-keyframe-list">${keys.map((k,i)=>`<div class="keyframe-row"><div class="keyframe-head"><b>Keyframe ${i+1}</b><button data-action="remove-motion-keyframe" data-id="${esc(k.id)}" aria-label="Remove keyframe ${i+1}">×</button></div>
       <div class="two-fields">${prop('Time (%)','keyframe:'+k.id+':t',Math.round(k.t*100),'number','min="1" max="99" step="1"')}${prop('Direction (°)','keyframe:'+k.id+':rotation',Math.round(M.normalizeAngle(k.rotation)),'number','step="1"')}</div>
       <div class="two-fields">${prop('X','keyframe:'+k.id+':x',Math.round(k.x),'number')}${prop('Y','keyframe:'+k.id+':y',Math.round(k.y),'number')}</div></div>`).join('')}</div>`;
   }
@@ -365,14 +365,13 @@ function selectionCenter(sel,b){const o=stateOf(sel,b);return o?{x:o.x,y:o.y}:nu
 function ringRadius(sel,scale){return Math.max(sel.type==='setobj'?55:sel.type==='camera'?45:38,34/scale)}
 
 function directionHandle(point,angle,distance=55){
- const r=Math.max(distance,42/ui.view.scale),theta=rad(angle??-90);
+ const r=Math.max(distance,30/ui.view.scale),theta=rad(angle??-90);
  return{x:point.x+r*Math.cos(theta),y:point.y+r*Math.sin(theta),r};
 }
 function paintDirectionHandle(g,point,angle,color,marker='END'){
- const target=directionHandle(point,angle,marker==='END'?68:53);
+ const target=directionHandle(point,angle,marker==='END'?40:32);
  g.save();g.strokeStyle=color;g.fillStyle=color;g.globalAlpha=.9;g.lineWidth=2/ui.view.scale;
  g.setLineDash([5/ui.view.scale,5/ui.view.scale]);g.beginPath();g.arc(point.x,point.y,target.r,0,Math.PI*2);g.stroke();g.setLineDash([]);
- g.beginPath();g.moveTo(point.x,point.y);g.lineTo(target.x,target.y);g.stroke();
  g.beginPath();g.arc(target.x,target.y,8/ui.view.scale,0,2*Math.PI);g.fill();g.strokeStyle='#15161A';g.lineWidth=2/ui.view.scale;g.stroke();g.restore();
 }
 function drawMotionRoute(g,s,color,opacity=1){
@@ -452,11 +451,11 @@ function hitAt(w){const sc=scene(),b=beat();if(!sc||!b)return null;
  if(ui.selection){const o=stateOf(),center=selectionCenter(ui.selection,b);if(center){
    const tol=Math.max(16,16/ui.view.scale);
    if(['camera','actor'].includes(ui.selection.type)&&o?.motion){
-    const e=o.motion,handle=directionHandle({x:e.endX,y:e.endY},e.endRotation??o.rotation,68);
+    const e=o.motion,handle=directionHandle({x:e.endX,y:e.endY},e.endRotation??o.rotation,40);
     if(Math.hypot(w.x-handle.x,w.y-handle.y)<tol)return{type:'end-rotate',selection:ui.selection};
     for(const k of e.keys||[]){
      if(ui.motionKeyId===k.id){
-      const h=directionHandle(k,k.rotation,53);
+      const h=directionHandle(k,k.rotation,32);
       if(Math.hypot(w.x-h.x,w.y-h.y)<tol)return{type:'key-rotate',keyId:k.id,selection:ui.selection};
      }
     }
@@ -693,7 +692,39 @@ async function saveVideo(){if(playback.exporting)return;await waitBackdrop();if(
  try{rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:3_000_000});const done=new Promise((resolve,reject)=>{rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};rec.onstop=resolve;rec.onerror=reject});rec.start(1000);notice(`Recording ${config.speed}× · ${(duration/1000).toFixed(1)}s · ${config.mode}`);const started=performance.now();while(performance.now()-started<duration){const elapsed=performance.now()-started,frame=P.frameAt(beats,elapsed,config);draw(g,c.width,c.height,{export:true,frame,mode:config.mode,ghost:exportPrefs().videoGhosts,cones:exportPrefs().cones,paths:exportPrefs().paths});await new Promise(requestAnimationFrame)}draw(g,c.width,c.height,{export:true,frame:P.frameAt(beats,duration,config),mode:config.mode,ghost:exportPrefs().videoGhosts,cones:exportPrefs().cones,paths:exportPrefs().paths});await new Promise(resolve=>setTimeout(resolve,150));rec.stop();await done;const blob=new Blob(chunks,{type:mime});if(blob.size===0)throw Error('Encoder created an empty file');download(blob,`${safe(projectName)}-${safe(title)}-animated-${config.speed}x.webm`);notice('Animated WebM exported')}catch(err){failed=true;console.error('Video export failed',err);notice('Video export failed: '+(err.message||'Unknown error'))}finally{if(rec?.state==='recording')rec.stop();stream.getTracks().forEach(t=>t.stop());playback.exporting=false;if(!failed)paint()}}
 
 function backup(){download(new Blob([JSON.stringify({format:'blockascene',version:2,project:project()},null,2)],{type:'application/json'}),`${safe(project().name)}.blockascene`);notice('Project backup exported')}
-async function importProject(file){try{const raw=JSON.parse(await file.text()),p=M.migrate(raw.project||raw);if(database.projects.some(x=>x.id===p.id))p.id=M.uid();database.projects.push(p);openProject(p.id);save();queuePreviews(p);notice('Project imported')}catch(e){notice('Import failed: '+e.message)}}
+async function readProjectText(file){
+ if(typeof file?.content==='string')return file.content;
+ if(typeof file?.text==='string')return file.text;
+ if(typeof file?.text==='function'){
+  try{return await file.text()}catch(error){console.warn('File.text failed; trying FileReader',error)}
+ }
+ if(typeof FileReader==='undefined')throw Error('Cannot read this file on this device.');
+ return await new Promise((resolve,reject)=>{
+  const reader=new FileReader();
+  reader.onload=()=>resolve(String(reader.result||''));
+  reader.onerror=()=>reject(reader.error||new Error('Could not access the selected file.'));
+  reader.readAsText(file,'UTF-8');
+ });
+}
+async function importProject(file){
+ if(!file)return;
+ try{
+  const input=(await readProjectText(file)).replace(/^\uFEFF/,'').trim();
+  if(input.length<2||input.length>50_000_000)throw Error('Project file is empty or too large (50 MB maximum).');
+  let raw;try{raw=JSON.parse(input)}catch{throw Error('This is not a valid .blockascene project backup.')}
+  if(!raw||typeof raw!=='object'||!Array.isArray((raw.project||raw).scenes))throw Error('No Block4Film scenes found in this project backup.');
+  const p=M.migrate(raw.project||raw);
+  if(database.projects.some(x=>x.id===p.id))p.id=M.uid();
+  database.projects.push(p);
+  openProject(p.id);
+  save();
+  queuePreviews(p);
+  notice('Imported project: '+p.name);
+ }catch(error){
+  console.error('Project import failed',error);
+  notice('Import failed: '+(error?.message||'Could not read project file'));
+ }
+}
 async function importBackground(file){if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type))return notice('Use PNG, JPG, or WebP');if(file.size>12e6)return notice('Choose an image under 12 MB');const reader=new FileReader();reader.onload=()=>{const target=ui.dialog?.kind==='edit-set'?project()?.sets.find(x=>x.id===ui.dialog.id):set();if(!target)return;checkpoint();target.background=reader.result;target.opacity=.8;target.darken=true;images.clear();if(ui.dialog?.kind!=='edit-set'){ui.selection={type:'background'};ui.showInspector=true}save();render();notice('Floor plan imported')};reader.readAsDataURL(file)}
 async function action(e){const target=e.target.closest('[data-action]');if(!target)return;e.preventDefault();e.stopPropagation();const a=target.dataset.action,id=target.dataset.id;if(a==='open-manual'){stopPlayback();ui.manualReturn=ui.page;ui.page='manual';ui.manualTab='start';ui.manualScroll={};ui.showMenu=false;ui.showLayers=false;ui.showExportPanel=false;render();return}if(a==='close-manual'){ui.page=ui.manualReturn||'workspace';render();return}if(a==='manual-tab'){const el=app.querySelector('.manual-content');if(el)ui.manualScroll[ui.manualTab]=el.scrollTop;ui.manualTab=target.dataset.tab||'start';render();return}if(a==='toggle-playback'){togglePlayback();return}if(playback.playing){playback.elapsedMs=elapsedPlayback();stopPlayback();}
  if(a==='library-view'){ui.libraryView=target.dataset.view==='list'?'list':'grid';render()}
@@ -721,7 +752,12 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
  else if(a==='rename-beat'){ui.dialog={kind:'edit-beat',id:ui.beatId};render()}
  else if(a==='delete-beat'){if(scene().beats.length===1)return notice('A scene needs at least one beat');ui.dialog={kind:'confirm-delete',targetKind:'beat',id:ui.beatId,name:beat()?.name||'Beat'};render()}
  else if(a==='quick-color'){edit('itemColor',target.dataset.color)}else if(a==='delete-selection')removeSelection();
- else if(a==='import-bg')fileInput.click();else if(a==='import-project')projectInput.click();else if(a==='select-bg'){ui.selection={type:'background'};ui.showInspector=true;ui.showMenu=false;render()}
+ else if(a==='import-bg')fileInput.click();else if(a==='import-project'){
+   if(window.Capacitor?.isNativePlatform?.()&&window.Block4FilmMobile?.pickProject){
+    try{const result=await window.Block4FilmMobile.pickProject();if(result)await importProject(result)}
+    catch(error){console.error('Native file picker failed',error);notice('Could not open file picker: '+(error?.message||'Unknown error'))}
+   }else projectInput.click();
+  }else if(a==='select-bg'){ui.selection={type:'background'};ui.showInspector=true;ui.showMenu=false;render()}
  else if(a==='clear-bg'){checkpoint();set().background=null;images.clear();save();render()}else if(a==='export-image')await savePNG();else if(a==='export-zip')await saveZIP();else if(a==='export-video-dialog'){ui.showExportPanel=false;ui.videoDraft={...playbackOptions()};ui.dialog={kind:'video'};render()}else if(a==='confirm-video-export'){const c=ui.videoDraft||playbackOptions();project().playback=P.settings({...playbackOptions(),speed:Number(c.speed),holdMs:Number(c.holdMs),mode:c.mode});ui.videoDraft=null;ui.dialog=null;save();render();await saveVideo()}else if(a==='export-video')await saveVideo();else if(a==='save-project'){clearTimeout(saveTimer);await writeDB();await queuePreviews(project());notice('Project saved locally')}else if(a==='backup')backup()}
 app.addEventListener('click',action);
 app.addEventListener('scroll',e=>{if(ui.page==='manual'&&e.target?.classList?.contains('manual-content'))ui.manualScroll[ui.manualTab]=e.target.scrollTop},true);

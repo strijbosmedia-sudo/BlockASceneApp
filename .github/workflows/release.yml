@@ -55,7 +55,7 @@ jobs:
       - name: Publish Windows release and retire cross-platform beta
         env:
           GH_TOKEN: ${{ github.token }}
-          WINDOWS_TAG: v1.3.1-tablet-motion-beta.1
+          WINDOWS_TAG: v1.3.2-tablet-hotfix-beta.1
         run: |
           set -euo pipefail
           ls -lh release-assets/*.exe
@@ -64,8 +64,8 @@ jobs:
           else
             gh release create "$WINDOWS_TAG" release-assets/*.exe \
               --target "$GITHUB_SHA" \
-              --title "Block4Film 1.3.1 - Tablet Motion & Keyframes Beta" \
-              --notes "Block4Film 1.3.1 tablet movement beta: touch tap-to-select and brief hold-to-move, stable move destinations, actor turn and camera pan within beats, editable curved motion keyframes, final destination facing control, and next-beat inheritance of end poses. Windows and Android testing encouraged. Existing stable v1.3.0 remains available. Back up your .blockascene files before testing." \
+              --title "Block4Film 1.3.2 - Tablet Import & Layout Hotfix Beta" \
+              --notes "Block4Film 1.3.2 tablet hotfix beta: native Android/iOS import of .blockascene project backups, corrected Properties/keyframe HTML and tablet panel layout, smaller destination direction ring without center spoke. Includes all v1.3.1 keyframe movement improvements. Stable 1.3.0 remains available; back up projects before updating." \
               --prerelease
           fi
           gh release view "$WINDOWS_TAG" --json assets --jq '.assets[].name' | grep -qE '\.exe$'
