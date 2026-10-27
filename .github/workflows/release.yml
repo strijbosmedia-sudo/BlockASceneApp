@@ -1,4 +1,4 @@
-name: Publish Block4Film cross-platform beta
+name: Publish Block4Film Windows portable release
 on:
   workflow_dispatch:
   push:
@@ -16,81 +16,44 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - run: npm install --no-audit --no-fund
-      - run: npm run test:model
-      - run: npm run dist:win
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Validate editor
+        run: npm run test:model
+      - name: Build portable Windows EXE
+        run: npm run dist:win
       - uses: actions/upload-artifact@v4
         with:
           name: windows-portable
           path: dist/*.exe
           if-no-files-found: error
-  macos:
-    runs-on: macos-latest
-    timeout-minutes: 55
-    env:
-      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - run: npm install --no-audit --no-fund
-      - run: npm run test:model
-      - run: npm run dist:mac
-      - uses: actions/upload-artifact@v4
-        with:
-          name: macos-packages
-          path: |
-            dist/*.dmg
-            dist/*.zip
-          if-no-files-found: error
-  android:
-    runs-on: ubuntu-latest
-    timeout-minutes: 55
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - run: npm install --no-audit --no-fund
-      - run: npm run test:model
-      - run: npm run android:prepare
-      - name: Build APK
-        working-directory: android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug --no-daemon
-      - run: cp android/app/build/outputs/apk/debug/app-debug.apk Block4Film-Android-debug.apk
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          path: Block4Film-Android-debug.apk
-          if-no-files-found: error
   publish:
-    needs: [windows, macos, android]
+    needs: windows
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
+          name: windows-portable
           path: release-assets
-          merge-multiple: true
-      - name: Publish permanent GitHub Release assets
+      - name: Publish Windows release and retire cross-platform beta
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: v1.0.0-crossplatform-beta.1
+          WINDOWS_TAG: v1.0.0-windows
+          LEGACY_TAG: v1.0.0-crossplatform-beta.1
         run: |
-          ls -lh release-assets/
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+          set -euo pipefail
+          ls -lh release-assets/*.exe
+          if gh release view "$WINDOWS_TAG" > /dev/null 2>&1; then
+            gh release upload "$WINDOWS_TAG" release-assets/*.exe --clobber
           else
-            gh release create "$RELEASE_TAG" release-assets/* \
+            gh release create "$WINDOWS_TAG" release-assets/*.exe \
               --target "$GITHUB_SHA" \
-              --title "Block4Film 1.0.0 — Cross-platform beta 1" \
-              --notes "Windows portable EXE, macOS Intel/Apple Silicon DMG and ZIP packages, and Android debug APK. Mac builds are not notarized, Android is debug-signed for sideloading, and neither Mac nor Android has yet completed physical-device acceptance testing. Backup projects before upgrading." \
-              --prerelease
+              --title "Block4Film 1.0.0 - Windows Portable" \
+              --notes "Windows-only portable Block4Film. macOS and Android packaging are paused. Your project files remain compatible; export backups before updating." \
+              --latest
+          fi
+          gh release view "$WINDOWS_TAG" --json assets --jq '.assets[].name' | grep -qE '\.exe$'
+          if gh release view "$LEGACY_TAG" > /dev/null 2>&1; then
+            gh release delete "$LEGACY_TAG" --yes --cleanup-tag
           fi

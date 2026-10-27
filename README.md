@@ -1,6 +1,6 @@
 # Block4Film v1.0.0
 
-**Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor for Windows, desktop browsers and touch tablets.
+**Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor currently developed and distributed for Windows.
 
 ## What is implemented
 
@@ -96,14 +96,14 @@ The GitHub repository name intentionally remains `BlockASceneApp` for link compa
 - Offline manual with seven clickable chapters appears in editor Menu and on the project dashboard.
 - Windows v1 is the release checkpoint; macOS and Android APK packaging follow later.
 
-## Cross-platform test builds (macOS and Android)
+## Windows-only development (October 2026)
 
-The existing **Windows portable EXE** workflow is preserved. On GitHub Actions, **Build macOS (Intel + Apple Silicon)** produces DMG/ZIP builds and **Build Android APK** produces a sideloadable debug-signed APK. Both share this editor and project backup format.
+We are intentionally pausing macOS and Android distribution while refining the Windows editor.
 
-Mac beta builds are **unsigned/unnotarized**, so Gatekeeper may block first launch. Signing/notarization is needed for normal public distribution. The Android APK is **debug-signed for testing**, not a Play Store release; production releases need your own persistent signing key.
+- Windows is the **only supported build and download target**. All scene-blocking features, touch support on Windows, offline autosave, and `.blockascene` project backups remain intact.
+- Download the latest Windows-only EXE from [GitHub Releases](https://github.com/strijbosmedia-sudo/BlockASceneApp/releases/latest) or fresh builds from [Windows Actions](https://github.com/strijbosmedia-sudo/BlockASceneApp/actions/workflows/windows-portable.yml).
+- The Mac/Android workflows and packaging integrations are removed from `main`, while Git history preserves their prior versions for future rebuilding.
+- The old cross-platform beta release is retired **after** a new Windows-only release is successfully published, preventing loss of the working download.
+- No editor data-model migration or Windows user-data directory changes are included in this update.
 
-Android project setup happens reproducibly during CI from `capacitor.config.json` and the `app/` web assets. Exports use Android native file sharing. Autosaved projects are device-local; transfer projects using `.blockascene` export/import. Android hardware testing (particularly WebM export and file sharing) is still required.
-
-Actions artifacts expire. Publish verified Windows, Mac, and Android binaries under **GitHub Releases** for permanent download links.
-
-Local commands: `npm install && npm run dist:mac` on a Mac; `npm install && npm run android:prepare` for Android, then `cd android && ./gradlew assembleDebug`.
+**Next:** collect Windows bugs and improvement requests, agree on a prioritized change log, then implement the next editor update.
