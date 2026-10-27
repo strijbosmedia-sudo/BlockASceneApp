@@ -26,7 +26,7 @@ function motionPoints(state){
 }
 function animateCameraPosition(camera,progress){
  if(!camera?.motion||camera.visible===false)return camera;
- const pts=motionPoints(camera),m=camera.motion,t=smooth(progress);
+ const pts=motionPoints(camera),m=camera.motion,t=pts.length>2?clamp(progress):smooth(progress);
  let j=1;while(j<pts.length-1&&t>pts[j].t)j++;
  const a=pts[j-1],b=pts[j],span=Math.max(.00001,b.t-a.t),u=clamp((t-a.t)/span);
  const r=clone(camera);
