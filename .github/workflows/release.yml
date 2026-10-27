@@ -42,7 +42,7 @@ jobs:
       - name: Publish Windows release and retire cross-platform beta
         env:
           GH_TOKEN: ${{ github.token }}
-          WINDOWS_TAG: v1.1.2-functional-beta.1
+          WINDOWS_TAG: v1.2.0-visual-beta.1
         run: |
           set -euo pipefail
           ls -lh release-assets/*.exe
@@ -51,8 +51,8 @@ jobs:
           else
             gh release create "$WINDOWS_TAG" release-assets/*.exe \
               --target "$GITHUB_SHA" \
-              --title "Block4Film 1.1.2 - Layout & Focus Beta" \
-              --notes "Windows-only v1.1.2 functional polish beta with focus-safe dialogs, independent left/right panel docking and draggable resizable floating panels. The verified v1.0 Windows release remains available as a stable fallback. Back up projects and test before replacing your working EXE." \
+              --title "Block4Film 1.2.0 - Cinematic UI Redesign Beta" \
+              --notes "Windows-only v1.2 cinematic UI beta. New charcoal/gray design across Workspace, Project Overview, Editor, dialogs and Manual. Beat 1 previews with optional custom project/scene images; Windows v1.1.2 remains available. Back up your projects before updating. The verified v1.0 Windows release remains available as a stable fallback. Back up projects and test before replacing your working EXE." \
               --prerelease
           fi
           gh release view "$WINDOWS_TAG" --json assets --jq '.assets[].name' | grep -qE '\.exe$'
