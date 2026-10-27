@@ -401,11 +401,68 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
  else if(a==='clear-bg'){checkpoint();set().background=null;images.clear();save();render()}else if(a==='export-image')await savePNG();else if(a==='export-zip')await saveZIP();else if(a==='export-video-dialog'){ui.showExportPanel=false;ui.videoDraft={...playbackOptions()};ui.dialog={kind:'video'};render()}else if(a==='confirm-video-export'){const c=ui.videoDraft||playbackOptions();project().playback=P.settings({...playbackOptions(),speed:Number(c.speed),holdMs:Number(c.holdMs),mode:c.mode});ui.videoDraft=null;ui.dialog=null;save();render();await saveVideo()}else if(a==='export-video')await saveVideo();else if(a==='save-project'){clearTimeout(saveTimer);await writeDB();notice('Project saved locally')}else if(a==='backup')backup()}
 app.addEventListener('click',action);
 app.addEventListener('scroll',e=>{if(ui.page==='manual'&&e.target?.classList?.contains('manual-content'))ui.manualScroll[ui.manualTab]=e.target.scrollTop},true);
-let resizePanel=null;
-app.addEventListener('pointerdown',e=>{const grip=e.target.closest('[data-resize-panel]');if(!grip)return;e.preventDefault();const panel=grip.dataset.resizePanel,el=grip.closest('[data-panel]');resizePanel={panel,startX:e.clientX,startWidth:el.getBoundingClientRect().width,el};grip.setPointerCapture(e.pointerId)});
-app.addEventListener('pointermove',e=>{if(!resizePanel)return;const d=resizePanel,delta=d.startX-e.clientX,width=clamp(d.startWidth+delta,220,470);d.el.style.width=width+'px';d.el.closest('.work-canvas')?.style.setProperty(d.panel==='layers'?'--b4-layers-width':'--b4-properties-width',width+'px');ui.layout[d.panel==='layers'?'layersWidth':'propertiesWidth']=width;paint()});
-app.addEventListener('pointerup',()=>{if(resizePanel){saveLayout();resizePanel=null}});
-app.addEventListener('pointercancel',()=>{resizePanel=null});
+let panelPointer=null;
+function panelBounds(root,el){
+ const stage=root.querySelector('#canvasWrap'),rootRect=root.getBoundingClientRect();
+ const area=stage?.getBoundingClientRect()||rootRect;
+ return {rootRect,left:area.left-rootRect.left+8,top:area.top-rootRect.top+8,right:area.right-rootRect.left-8,bottom:area.bottom-rootRect.top-8};
+}
+app.addEventListener('pointerdown',e=>{
+ const grip=e.target.closest('[data-resize-panel]'),handle=grip?null:e.target.closest('[data-drag-panel]');
+ if(!grip&&!handle)return;
+ if(e.pointerType==='mouse'&&e.button!==0)return;
+ if(handle&&e.target.closest('button,input,select,a,[data-action]'))return;
+ const trigger=grip||handle,panel=grip?.dataset.resizePanel||handle.dataset.dragPanel,el=trigger.closest('[data-panel]');
+ if(!el)return;
+ const root=el.closest('.work-canvas'),rect=el.getBoundingClientRect(),bounds=panelBounds(root,el);
+ const pinned=el.classList.contains('docked'),side=el.dataset.side||'right';
+ if(handle&&pinned)return;
+ e.preventDefault();
+ if(!pinned){
+  // Freeze computed position before moving or sizing so the box never jumps.
+  const left=rect.left-bounds.rootRect.left,top=rect.top-bounds.rootRect.top;
+  el.style.left=left+'px';el.style.top=top+'px';el.style.right='auto';el.style.bottom='auto';
+  el.dataset.moved='true';
+  ui.layout[panel+'FloatX']=Math.round(left);ui.layout[panel+'FloatY']=Math.round(top);
+ }
+ panelPointer={pointerId:e.pointerId,panel,mode:grip?'resize':'move',pinned,side,el,root,
+  startX:e.clientX,startY:e.clientY,startWidth:rect.width,startHeight:rect.height,
+  startLeft:rect.left-bounds.rootRect.left,startTop:rect.top-bounds.rootRect.top,
+  startStageWidth:root.querySelector('#canvasWrap')?.getBoundingClientRect().width||350};
+ try{trigger.setPointerCapture(e.pointerId)}catch{}
+});
+app.addEventListener('pointermove',e=>{
+ const d=panelPointer;if(!d||d.pointerId!==e.pointerId)return;
+ e.preventDefault();
+ const bounds=panelBounds(d.root,d.el),dx=e.clientX-d.startX,dy=e.clientY-d.startY;
+ if(d.mode==='move'){
+  const width=d.el.getBoundingClientRect().width,height=d.el.getBoundingClientRect().height;
+  const left=clamp(d.startLeft+dx,bounds.left,Math.max(bounds.left,bounds.right-width));
+  const top=clamp(d.startTop+dy,bounds.top,Math.max(bounds.top,bounds.bottom-Math.min(height,48)));
+  d.el.style.left=left+'px';d.el.style.top=top+'px';
+  ui.layout[d.panel+'FloatX']=Math.round(left);ui.layout[d.panel+'FloatY']=Math.round(top);
+ }else{
+  const maxWidth=d.pinned?Math.min(470,Math.max(220,d.startWidth+d.startStageWidth-240)):
+   Math.min(470,Math.max(220,bounds.right-d.startLeft));
+  const delta=d.pinned?(d.side==='left'?dx:-dx):dx;
+  const width=clamp(d.startWidth+delta,220,maxWidth);
+  d.el.style.width=width+'px';ui.layout[d.panel+'Width']=Math.round(width);
+  if(d.pinned){
+   d.root.style.setProperty(d.panel==='layers'?'--b4-layers-width':'--b4-properties-width',Math.round(width)+'px');
+   paint();
+  }else{
+   const height=clamp(d.startHeight+dy,230,Math.max(230,bounds.bottom-d.startTop));
+   d.el.style.height=height+'px';ui.layout[d.panel+'FloatHeight']=Math.round(height);
+  }
+ }
+});
+function endPanelPointer(e){
+ if(panelPointer&&e.pointerId===panelPointer.pointerId){
+  panelPointer=null;saveLayout();
+ }
+}
+app.addEventListener('pointerup',endPanelPointer);
+app.addEventListener('pointercancel',endPanelPointer);
 app.addEventListener('contextmenu',e=>{const t=e.target.closest('[data-context-kind]');if(!t)return;e.preventDefault();openContext(t.dataset.contextKind,t.dataset.id,e.clientX,e.clientY)});
 let holdTimer=null,holdStart=null;
 app.addEventListener('pointerdown',e=>{if(e.pointerType==='mouse')return;const t=e.target.closest('[data-context-kind]');if(!t)return;holdStart={x:e.clientX,y:e.clientY};clearTimeout(holdTimer);holdTimer=setTimeout(()=>{holdTimer=null;openContext(t.dataset.contextKind,t.dataset.id,e.clientX,e.clientY)},570)});
