@@ -47,7 +47,35 @@ function createProject(name='Untitled Film'){
  const scene={id:uid(),name:'01 · The Conversation',setId:set.id,actors:[actor1,actor2],cameras:[cam1,cam2],equipment:[],beats:[makeBeat('Entrance',310,535,480),makeBeat('Approach',450,430,480),makeBeat('Dialogue',550,295,650)]};scene.beats[2].cameras[c2.id].visible=true;p.scenes.push(scene);return p;
 }
 function nextBeat(scene,current){const idx=scene.beats.findIndex(b=>b.id===current?.id),previous=current||scene.beats[scene.beats.length-1];const beat={id:uid(),name:`Beat ${String(scene.beats.length+1).padStart(2,'0')}`,positions:clone(previous?.positions||{}),cameras:clone(previous?.cameras||{}),equipment:clone(previous?.equipment||{})};scene.beats.splice(idx<0?scene.beats.length:idx+1,0,beat);return beat}
-function addIdentity(project,scene,type,beat,point,shape){const id=uid(),entry={id};applyIdentity(project,entry,type);if(type==='actor'){scene.actors.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.positions[id]=defaultActorState(point.x,point.y)}}else if(type==='camera'){scene.cameras.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.cameras[id]=defaultCameraState(point.x,point.y)}}else{entry.name=shape==='custom'?'Custom Object':shape[0].toUpperCase()+shape.slice(1);entry.type=shape;entry.color='#C4C7CD';scene.equipment.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.equipment[id]=defaultEquipmentState(point.x,point.y)}}return entry}
+function nextAvailableNumber(scene,type){
+ const list=type==='actor'?scene.actors:type==='camera'?scene.cameras:[];
+ const used=new Set(list.map(o=>Number(o.number)).filter(v=>Number.isSafeInteger(v)&&v>0));
+ let next=1;while(used.has(next))next++;return next;
+}
+/* IDs are shared through project.identities, while number availability is scene-local.
+   Check every scene containing this identity so an edit cannot create a collision in
+   another scene where the same actor or camera is reused. */
+function numberAvailable(project,scene,type,id,number){
+ const requested=Number(number),key=type==='actor'?'actors':type==='camera'?'cameras':null;
+ if(!key||!Number.isSafeInteger(requested)||requested<1||requested>9999)return false;
+ if(!scene?.[key]?.some(o=>o.id===id))return false;
+ for(const sc of project.scenes||[]){
+  if(!sc[key]?.some(o=>o.id===id))continue;
+  if(sc[key].some(o=>o.id!==id&&Number(o.number)===requested))return false;
+ }
+ return true;
+}
+function setIdentityNumber(project,scene,type,id,number){
+ const requested=Number(number),identity=project.identities?.[id];
+ if(identity?.type!==type||!numberAvailable(project,scene,type,id,requested))return 'That '+(type==='actor'?'letter':'number')+' is already in use or unavailable.';
+ identity.number=requested;
+ const key=type==='actor'?'actors':'cameras';
+ for(const sc of project.scenes)for(const item of sc[key]||[])if(item.id===id)item.number=requested;
+ return null;
+}
+function addIdentity(project,scene,type,beat,point,shape){const id=uid(),entry={id};
+ if(type==='actor'||type==='camera')entry.number=nextAvailableNumber(scene,type);
+ applyIdentity(project,entry,type);if(type==='actor'){scene.actors.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.positions[id]=defaultActorState(point.x,point.y)}}else if(type==='camera'){scene.cameras.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.cameras[id]=defaultCameraState(point.x,point.y)}}else{entry.name=shape==='custom'?'Custom Object':shape[0].toUpperCase()+shape.slice(1);entry.type=shape;entry.color='#C4C7CD';scene.equipment.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.equipment[id]=defaultEquipmentState(point.x,point.y)}}return entry}
 function recolor(project,id,newColor){if(!validColor(newColor))return 'Invalid HEX color';const info=project.identities?.[id];if(info&&Object.entries(project.identities).some(([key,v])=>key!==id&&colorKey(v.color)===colorKey(newColor)))return 'Color already used. Pick another color.';if(info)info.color=newColor;for(const scene of project.scenes)for(const entity of [...scene.actors,...scene.cameras,...scene.equipment])if(entity.id===id)entity.color=newColor;return null}
 /** Set visibility on any beat, including beats before an object was introduced.
  * A missing state is copied from the nearest beat that contains this identity.
@@ -73,5 +101,5 @@ function setBeatVisibility(scene,type,id,beatId,visible){
 }
 function setOutline(project,id,outline){if(!['white','black'].includes(outline))return false;const item=project.identities?.[id];if(item)item.outline=outline;for(const s of project.scenes)for(const v of [...s.actors,...s.cameras])if(v.id===id)v.outline=outline;return true}
 function rename(project,id,newName){const info=project.identities?.[id];if(info)info.name=newName;for(const scene of project.scenes)for(const entity of [...scene.actors,...scene.cameras,...scene.equipment])if(entity.id===id)entity.name=newName}
-return {VERSION,PRESET,clone,uid,label,normalizeAngle,register,applyIdentity,uniqueColor,migrate,createProject,nextBeat,addIdentity,recolor,rename,setOutline,setBeatVisibility,defaultActorState,defaultCameraState,defaultEquipmentState};
+return {VERSION,PRESET,clone,uid,label,normalizeAngle,register,applyIdentity,uniqueColor,migrate,createProject,nextBeat,addIdentity,nextAvailableNumber,numberAvailable,setIdentityNumber,recolor,rename,setOutline,setBeatVisibility,defaultActorState,defaultCameraState,defaultEquipmentState};
 });
