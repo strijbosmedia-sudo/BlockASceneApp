@@ -46,7 +46,7 @@ jobs:
         with:
           distribution: temurin
           java-version: '21'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
       - name: Install dependencies
         run: npm install --no-audit --no-fund
       - name: Check editor and prepare mobile assets
@@ -76,7 +76,7 @@ jobs:
         run: npm run mobile:ios
       - name: Build iOS Simulator application without device signing
         run: |
-          xcodebuild -workspace ios/App/App.xcworkspace \
+          xcodebuild -project ios/App/App.xcodeproj \
             -scheme App -configuration Debug -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath "$RUNNER_TEMP/Block4Film-iOS" \
