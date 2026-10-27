@@ -116,11 +116,27 @@ const {chromium}=require('playwright'),sharp=require('sharp'),M=require('../app/
    const pathBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
    await page.locator('select[name="motionPath"]').selectOption('smooth');
    assert.ok(Math.abs((await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop))-pathBefore)<=1,'Path changes retain Properties scroll');
+   const endX=page.locator('input[name="endX"]');
+   await endX.fill(String(Number(await endX.inputValue())+1));
+   const numericBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
+   assert.ok(numericBefore>0);
+   await endX.dispatchEvent('change');
+   assert.ok(Math.abs((await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop))-numericBefore)<=1,'Numeric settings retain Properties scroll');
+   const visibility=page.locator('.beat-visibility input').last();
+   await visibility.scrollIntoViewIfNeeded();
+   const visibilityBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
+   await visibility.setChecked(!(await visibility.isChecked()));
+   assert.ok(Math.abs((await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop))-visibilityBefore)<=1,'Checkbox settings retain Properties scroll');
+   await page.locator('.inspector .inspect-body').evaluate(el=>{el.scrollTop=150});
+   const colorBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
+   assert.ok(colorBefore>0);
+   await page.locator('input[name="itemColor"]').evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}))},pinned?'#020304':'#010203');
+   assert.ok(Math.abs((await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop))-colorBefore)<=1,'Color settings retain Properties scroll');
   }
   await page.screenshot({path:path.join(out,'properties-scroll-retained.png'),fullPage:true});
   assert.equal(errors.length,0,errors.join('\n'));
   await page.screenshot({path:path.join(out,'reopened-project.png'),fullPage:true});
-  await fs.writeFile(path.join(out,'result.json'),JSON.stringify({passed:true,checks:['browser project import','replacement image defaults to 100%','scale dialog','Wall/Window picker','rotated furniture dimensions','motion isolation','backup export','saved-project reopen','tablet layout','touch input','sidebar outside dismissal and click-through','floating and pinned Properties scroll retention'],pageErrors:errors},null,2));
+  await fs.writeFile(path.join(out,'result.json'),JSON.stringify({passed:true,checks:['browser project import','replacement image defaults to 100%','scale dialog','Wall/Window picker','rotated furniture dimensions','motion isolation','backup export','saved-project reopen','tablet layout','touch input','sidebar outside dismissal and click-through','floating and pinned Properties scroll retention for movement, numeric, checkbox and color settings'],pageErrors:errors},null,2));
   console.log('Chromium project import, scale, windows, rotated sizing, backup, reopen and tablet layout passed');
  }catch(error){
   if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});
