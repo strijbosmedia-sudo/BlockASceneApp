@@ -103,34 +103,51 @@ const {chromium}=require('playwright'),sharp=require('sharp'),M=require('../app/
   await page.setViewportSize({width:900,height:720});
   await page.locator('[data-action="toggle-layers"]').click();
   await page.locator('[data-action="select-object"][data-kind="actor"][data-id="'+scene.actors[1].id+'"]').click();
+  async function waitForPropertiesRefresh(previous){
+   await page.waitForFunction(body=>!body.isConnected,previous);
+   await previous.dispose();
+  }
   for(const pinned of [false,true]){
    if(pinned)await page.locator('[data-action="toggle-pin"][data-panel="properties"]').click();
+   let previous=await page.locator('.inspector .inspect-body').elementHandle();
    await page.locator('select[name="motionKind"]').selectOption('static');
+   await waitForPropertiesRefresh(previous);
    await page.locator('select[name="motionKind"]').scrollIntoViewIfNeeded();
    const before=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
    assert.ok(before>0,'Properties is scrolled before the movement change');
+   previous=await page.locator('.inspector .inspect-body').elementHandle();
    await page.locator('select[name="motionKind"]').selectOption('walk');
+   await waitForPropertiesRefresh(previous);
    const after=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
    assert.ok(Math.abs(after-before)<=1,'Movement change retains Properties scroll in '+(pinned?'pinned':'floating')+' layout');
    await page.locator('select[name="motionPath"]').scrollIntoViewIfNeeded();
    const pathBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
+   previous=await page.locator('.inspector .inspect-body').elementHandle();
    await page.locator('select[name="motionPath"]').selectOption('smooth');
+   await waitForPropertiesRefresh(previous);
    assert.ok(Math.abs((await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop))-pathBefore)<=1,'Path changes retain Properties scroll');
    const endX=page.locator('input[name="endX"]');
    await endX.fill(String(Number(await endX.inputValue())+1));
    const numericBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
    assert.ok(numericBefore>0);
+   previous=await page.locator('.inspector .inspect-body').elementHandle();
    await endX.dispatchEvent('change');
-   assert.ok(Math.abs((await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop))-numericBefore)<=1,'Numeric settings retain Properties scroll');
+   await waitForPropertiesRefresh(previous);
+   const numericAfter=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
+   assert.ok(Math.abs(numericAfter-numericBefore)<=1,'Numeric settings retain Properties scroll: '+numericBefore+' -> '+numericAfter);
    const visibility=page.locator('.beat-visibility input').last();
    await visibility.scrollIntoViewIfNeeded();
    const visibilityBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
+   previous=await page.locator('.inspector .inspect-body').elementHandle();
    await visibility.setChecked(!(await visibility.isChecked()));
+   await waitForPropertiesRefresh(previous);
    assert.ok(Math.abs((await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop))-visibilityBefore)<=1,'Checkbox settings retain Properties scroll');
    await page.locator('.inspector .inspect-body').evaluate(el=>{el.scrollTop=150});
    const colorBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
    assert.ok(colorBefore>0);
+   previous=await page.locator('.inspector .inspect-body').elementHandle();
    await page.locator('input[name="itemColor"]').evaluate((el,value)=>{el.value=value;el.dispatchEvent(new Event('change',{bubbles:true}))},pinned?'#020304':'#010203');
+   await waitForPropertiesRefresh(previous);
    assert.ok(Math.abs((await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop))-colorBefore)<=1,'Color settings retain Properties scroll');
   }
   await page.screenshot({path:path.join(out,'properties-scroll-retained.png'),fullPage:true});
