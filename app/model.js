@@ -29,7 +29,7 @@ function migrate(project){if(!project||!Array.isArray(project.sets)||!Array.isAr
   for(const actor of s.actors)applyIdentity(p,actor,'actor');
   if(Array.isArray(s.setups)){for(const old of s.setups){const camera=applyIdentity(p,{id:old.id,name:old.name,},'camera');s.cameras.push(camera)}}
   for(const camera of s.cameras)applyIdentity(p,camera,'camera');for(const actor of s.actors)actor.outline=(p.identities[actor.id].outline ||= actor.outline||'white');for(const camera of s.cameras)camera.outline=(p.identities[camera.id].outline ||= camera.outline||'white');
-  for(const beat of s.beats){beat.positions??={};beat.cameras??={};beat.equipment??={};for(const actor of s.actors){if(beat.positions[actor.id]){beat.positions[actor.id].rotation??=-90;beat.positions[actor.id].visible??=true}}
+  for(const beat of s.beats){beat.positions??={};beat.cameras??={};beat.equipment??={};for(const actor of s.actors){if(beat.positions[actor.id]){beat.positions[actor.id].rotation??=-90;beat.positions[actor.id].visible??=true;beat.positions[actor.id].motion??=null}}
     if(Array.isArray(s.setups))for(const old of s.setups){if(!beat.cameras[old.id])beat.cameras[old.id]={...defaultCameraState(),x:old.x,y:old.y,rotation:old.rotation??-90,lens:old.lens||35,sensor:old.sensor||36}}
     for(const [id,state] of Object.entries(beat.cameras)){state.visible??=true;state.motion??=null;state.rotation??=-90;state.lens??=35;state.sensor??=36;if(state.motion){state.motion.kind??='track';state.motion.endRotation??=state.rotation;}}
     for(const [id,state] of Object.entries(beat.equipment)){state.rotation??=0;state.visible??=true;}
