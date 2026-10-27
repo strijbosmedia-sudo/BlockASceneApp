@@ -398,12 +398,46 @@ function arrow(g,a,b,color,dotted=false,opacity=1,lineWidth=3){const angle=Math.
 function drawActor(g,a,s,ghost=false,opacity=1){if(!s||s.visible===false)return;g.save();g.translate(s.x,s.y);const color=ghost?'#8A8E97':a.color;g.globalAlpha=(ghost?.38:1)*(s.alpha??1)*opacity;g.fillStyle=ghost?'#292B30':color;g.strokeStyle=ghost?'#B9BDC6':a.outline==='black'?'#09090B':'#E8EBEF';g.lineWidth=ghost?1.8:2.4;if(ghost)g.setLineDash([4,5]);g.beginPath();g.arc(0,0,20,0,Math.PI*2);g.fill();g.stroke();g.setLineDash([]);g.save();g.rotate(rad(s.rotation??-90));g.beginPath();g.moveTo(29,0);g.lineTo(14,-9);g.lineTo(14,9);g.closePath();g.fillStyle=color;g.fill();g.restore();fillText(g,M.label(a.number||1),0,1,18,ghost?'#C1C4CC':'#0A0B0E');if(!ghost)fillText(g,a.name,s.x-s.x,s.y-s.y-34,13,a.color,false);g.restore()}
 function drawActorMove(g,a,s){if(!s||s.visible===false||!s.motion)return;const m=s.motion;drawMotionRoute(g,s,a.color,.85);if(Math.hypot(m.endX-s.x,m.endY-s.y)<9)return;g.save();g.strokeStyle=a.color;g.lineWidth=2;g.setLineDash([5,5]);g.beginPath();g.arc(m.endX,m.endY,18,0,Math.PI*2);g.stroke();g.restore();fillText(g,'2',m.endX,m.endY,12,a.color)}
 function drawCamera(g,c,s,ghost=false,showMotion=true,showCone=true,opacity=1){if(!s||s.visible===false)return;const color=ghost?'#92959F':c.color;g.save();g.globalAlpha=(ghost?.35:1)*(s.alpha??1)*opacity;
- if(showCone){const half=Math.atan((s.sensor||36)/(2*(s.lens||35))),angle=rad(s.rotation||0),distance=365;g.fillStyle=ghost?'#848A9510':c.color+'17';g.strokeStyle=ghost?'#9AA0AA55':c.color+'66';g.lineWidth=1.7;g.beginPath();g.moveTo(s.x,s.y);g.lineTo(s.x+distance*Math.cos(angle-half),s.y+distance*Math.sin(angle-half));g.arc(s.x,s.y,distance,angle-half,angle+half);g.closePath();g.fill();g.stroke()}
+ if(showCone){const half=Math.atan((s.sensor||36)/(2*(s.lens||35))),angle=rad(s.rotation||0),distance=clamp(s.coneRange??365,80,1100);g.fillStyle=ghost?'#848A9510':c.color+'17';g.strokeStyle=ghost?'#9AA0AA55':c.color+'66';g.lineWidth=1.7;g.beginPath();g.moveTo(s.x,s.y);g.lineTo(s.x+distance*Math.cos(angle-half),s.y+distance*Math.sin(angle-half));g.arc(s.x,s.y,distance,angle-half,angle+half);g.closePath();g.fill();g.stroke()}
  if(showMotion&&s.motion&&Math.hypot(s.motion.endX-s.x,s.motion.endY-s.y)>=9){const target={x:s.motion.endX,y:s.motion.endY};drawMotionRoute(g,s,color,ghost?.45:.94);g.save();g.translate(target.x,target.y);g.rotate(rad(s.motion.endRotation??s.rotation));g.strokeStyle=color;g.lineWidth=2.5;g.setLineDash([5,5]);g.strokeRect(-17,-12,34,24);g.setLineDash([]);g.restore();fillText(g,'2',target.x,target.y,15,color);if(!ghost){fillText(g,'POS 1',s.x,s.y+40,10,color,false);fillText(g,'POS 2',target.x,target.y+30,10,color,false)}}
  g.translate(s.x,s.y);g.save();g.rotate(rad(s.rotation||0));g.fillStyle=ghost?'#2C2E34':color;g.strokeStyle=ghost?'#B8BBC4':c.outline==='black'?'#09090B':'#F0F1F5';g.lineWidth=ghost?1.8:2.5;g.beginPath();g.roundRect(-21,-15,42,30,6);g.fill();g.stroke();g.beginPath();g.moveTo(20,-10);g.lineTo(33,0);g.lineTo(20,10);g.closePath();g.fill();g.restore();fillText(g,String(c.number||1),0,0,16,ghost?'#CFD0D5':'#101013');if(!ghost)fillText(g,c.name,0,-33,12,c.color,false);g.restore()}
 function drawEquipment(g,e,s,ghost=false,opacity=1){if(!s||s.visible===false)return;g.save();g.translate(s.x,s.y);g.rotate(rad(s.rotation||0));g.globalAlpha=(ghost?.25:1)*(s.alpha??1)*opacity;g.strokeStyle=ghost?'#979AA2':e.color||'#C4C7CF';g.fillStyle='#25262B';g.lineWidth=3;const kind=e.type;g.beginPath();if(['light','reflector','stand'].includes(kind)){g.arc(0,0,kind==='reflector'?22:17,0,Math.PI*2);g.fill();g.stroke();if(kind==='light'){g.beginPath();g.moveTo(0,0);g.lineTo(30,0);g.stroke()}else if(kind==='stand'){g.beginPath();g.moveTo(-9,-9);g.lineTo(9,9);g.moveTo(-9,9);g.lineTo(9,-9);g.stroke()}}
  else if(kind==='tube'||kind==='track'||kind==='boom'){g.moveTo(-34,0);g.lineTo(34,0);g.stroke();if(kind==='track'){g.moveTo(-34,-9);g.lineTo(34,-9);g.stroke()}}else if(kind==='flag'){g.rect(-22,-17,44,34);g.stroke();g.beginPath();g.moveTo(0,-17);g.lineTo(0,17);g.stroke()}else{g.roundRect(-26,-17,52,34,kind==='panel'?3:9);g.fill();g.stroke()}g.restore();if(!ghost)fillText(g,e.name,s.x,s.y-40,12,e.color||'#DBDEE4',false)}
-function drawSetObject(g,o){g.save();g.translate(o.x,o.y);g.rotate(rad(o.rotation||0));const line=o.type==='wall',door=o.type==='door';if(line||door){g.strokeStyle=door?'#A68D69':'#71757E';g.lineWidth=line?10:5;g.beginPath();g.moveTo(0,0);g.lineTo(o.w||60,o.h||0);g.stroke()}else{g.fillStyle='#45485166';g.strokeStyle='#777B85';g.lineWidth=2;g.beginPath();g.roundRect(-o.w/2,-o.h/2,o.w,o.h,7);g.fill();g.stroke();fillText(g,o.name||'Furniture',0,0,13,'#9FA3AD',false)}g.restore()}
+function isStructural(obj){return ['wall','window','door'].includes(obj?.type)}
+function objectLocal(obj,p){
+ const theta=rad(obj.rotation||0),dx=p.x-obj.x,dy=p.y-obj.y,c=Math.cos(theta),s=Math.sin(theta);
+ return{x:dx*c+dy*s,y:-dx*s+dy*c};
+}
+function setResizeHandle(obj){
+ const theta=rad(obj.rotation||0),line=isStructural(obj),xx=line?(obj.w||80):(obj.w||110)/2,yy=line?0:(obj.h||80)/2;
+ return {x:obj.x+xx*Math.cos(theta)-yy*Math.sin(theta),
+  y:obj.y+xx*Math.sin(theta)+yy*Math.cos(theta)};
+}
+function setContainsPoint(obj,p,tolerance=13){
+ const q=objectLocal(obj,p);
+ if(isStructural(obj)){const length=Math.max(20,obj.w||80);
+  const closest=clamp(q.x,0,length);
+  return Math.hypot(q.x-closest,q.y)<=tolerance+5;
+ }
+ return Math.abs(q.x)<=(obj.w||110)/2+tolerance&&Math.abs(q.y)<=(obj.h||80)/2+tolerance;
+}
+function drawSetObject(g,o){
+ g.save();g.translate(o.x,o.y);g.rotate(rad(o.rotation||0));
+ const line=isStructural(o),length=o.w||80;
+ if(line){
+  const door=o.type==='door',window=o.type==='window';
+  g.strokeStyle=door?'#B79B75':window?'#82B6D0':'#868A93';
+  g.lineWidth=door?5:window?7:10;g.lineCap='round';g.beginPath();g.moveTo(0,0);g.lineTo(length,0);g.stroke();
+  if(window){g.strokeStyle='#C7EBF9';g.lineWidth=2;g.beginPath();g.moveTo(0,-4);g.lineTo(length,-4);g.moveTo(0,4);g.lineTo(length,4);g.stroke()}
+  if(door){g.strokeStyle='#B79B7566';g.lineWidth=1.5;g.beginPath();g.arc(0,0,length,-Math.PI/2,0);g.stroke()}
+ }else{
+  const width=Math.max(20,o.w||110),height=Math.max(20,o.h||80);
+  g.fillStyle='#45485166';g.strokeStyle='#777B85';g.lineWidth=2;
+  g.beginPath();g.roundRect(-width/2,-height/2,width,height,7);g.fill();g.stroke();
+  fillText(g,o.name||'Furniture',0,0,13,'#9FA3AD',false);
+ }
+ g.restore();
+}
 function drawGhostStates(g,s,idx,mode='adjacent',moves=false){
  const indices=mode==='all'?s.beats.map((_,i)=>i).filter(i=>i!==idx):[idx-1,idx+1].filter(i=>i>=0&&i<s.beats.length);
  for(const i of indices){const other=s.beats[i];for(const a of s.actors)drawActor(g,a,other.positions[a.id],true);for(const c of s.cameras)drawCamera(g,c,other.cameras[c.id],true,moves,false);for(const e of s.equipment)if(!e.lockToSet)drawEquipment(g,e,other.equipment[e.id],true)}
@@ -433,6 +467,17 @@ function draw(g,width,height,opts={}){const s=scene(),location=set();if(!s||!loc
  if(!exportMode&&ui.selection){const origin=selectionCenter(ui.selection,b);if(origin){const r=ringRadius(ui.selection,view.scale),color=detailsOf(ui.selection)?.color||'#EDEEF1';
 
    const selectedState=stateOf(ui.selection);
+   if(ui.selection.type==='setobj'&&selectedState){
+    const handle=setResizeHandle(selectedState);
+    g.save();g.fillStyle='#E4E9F0';g.strokeStyle='#30343B';g.lineWidth=2/view.scale;
+    g.beginPath();g.arc(handle.x,handle.y,Math.max(8,8/view.scale),0,Math.PI*2);g.fill();g.stroke();g.restore();
+   }
+   if(ui.selection.type==='camera'&&selectedState&&ui.showCones){
+    const length=clamp(selectedState.coneRange??365,80,1100),heading=rad(selectedState.rotation??0),
+     end={x:selectedState.x+length*Math.cos(heading),y:selectedState.y+length*Math.sin(heading)};
+    g.save();g.fillStyle=color;g.strokeStyle='#F4F5F8';g.lineWidth=2/view.scale;
+    g.beginPath();g.arc(end.x,end.y,Math.max(10,10/view.scale),0,Math.PI*2);g.fill();g.stroke();g.restore();
+   }
    if(selectedState?.motion){
     const m=selectedState.motion;
     paintDirectionHandle(g,{x:m.endX,y:m.endY},m.endRotation??selectedState.rotation,color,'END');
@@ -452,6 +497,9 @@ function hitAt(w){const sc=scene(),b=beat();if(!sc||!b)return null;
  // Selected object ring and camera path end take priority over object bodies.
  if(ui.selection){const o=stateOf(),center=selectionCenter(ui.selection,b);if(center){
    const tol=Math.max(16,16/ui.view.scale);
+   if(ui.selection.type==='setobj'&&o){const handle=setResizeHandle(o);if(Math.hypot(w.x-handle.x,w.y-handle.y)<tol)return{type:'set-resize',selection:ui.selection}}
+   if(ui.selection.type==='camera'&&o&&ui.showCones){const end={x:o.x+clamp(o.coneRange??365,80,1100)*Math.cos(rad(o.rotation??0)),y:o.y+clamp(o.coneRange??365,80,1100)*Math.sin(rad(o.rotation??0))};if(Math.hypot(w.x-end.x,w.y-end.y)<tol)return{type:'cone-range',selection:ui.selection}}
+
    if(['camera','actor'].includes(ui.selection.type)&&o?.motion){
     const e=o.motion,handle=directionHandle({x:e.endX,y:e.endY},e.endRotation??o.rotation,40);
     if(Math.hypot(w.x-handle.x,w.y-handle.y)<tol)return{type:'end-rotate',selection:ui.selection};
@@ -470,7 +518,7 @@ function hitAt(w){const sc=scene(),b=beat();if(!sc||!b)return null;
  for(let i=sc.actors.length-1;i>=0;i--){const a=sc.actors[i],v=b.positions[a.id];if(v?.visible!==false&&v&&Math.hypot(w.x-v.x,w.y-v.y)<=Math.max(24,19/ui.view.scale))return{type:'object',selection:{type:'actor',id:a.id}}}
  for(let i=sc.cameras.length-1;i>=0;i--){const c=sc.cameras[i],v=b.cameras[c.id];if(v?.visible!==false&&v&&Math.hypot(w.x-v.x,w.y-v.y)<=Math.max(30,22/ui.view.scale))return{type:'object',selection:{type:'camera',id:c.id}}}
  for(let i=sc.equipment.length-1;i>=0;i--){const e=sc.equipment[i],v=e.lockToSet?e.fixedState:b.equipment[e.id];if(v?.visible!==false&&v&&Math.hypot(w.x-v.x,w.y-v.y)<=Math.max(32,24/ui.view.scale))return{type:'object',selection:{type:'equipment',id:e.id}}}
- for(let i=set().objects.length-1;i>=0;i--){const o=set().objects[i];if(Math.hypot(w.x-o.x,w.y-o.y)<=Math.max(32,(o.w||50)/2))return{type:'object',selection:{type:'setobj',id:o.id}}}
+ for(let i=set().objects.length-1;i>=0;i--){const o=set().objects[i];if(setContainsPoint(o,w,Math.max(12,12/ui.view.scale)))return{type:'object',selection:{type:'setobj',id:o.id}}}
  return null}
 function place(tool,pos){checkpoint();const p=project(),s=scene(),b=beat();let entry;if(['actor','camera'].includes(tool)){entry=M.addIdentity(p,s,tool,b,pos);ui.selection={type:tool,id:entry.id}}else if(tool.startsWith('equip:')){entry=M.addIdentity(p,s,'equipment',b,pos,tool.slice(6));ui.selection={type:'equipment',id:entry.id}}else{entry={id:M.uid(),name:tool==='furniture'?'Table':tool==='window'?'Window':tool==='wall'?'Wall':tool==='door'?'Door':'',type:tool,x:pos.x,y:pos.y,w:tool==='wall'||tool==='window'?160:tool==='door'?80:110,h:tool==='furniture'?80:0,rotation:0};set().objects.push(entry);ui.selection={type:'setobj',id:entry.id}}ui.showInspector=true;ui.tool='select';save();render()}
 function onDown(e){
@@ -555,6 +603,14 @@ function onMove(e){
   // An end point is anchored: dragging the start cannot drag a defined destination.
   // Pan/turn in place is the one exception where both coordinates must coincide.
   if(state.motion&&['turn','pan'].includes(state.motion.kind)){state.motion.endX=state.x;state.motion.endY=state.y}
+ }else if(drag.mode==='set-resize'){
+  const w=world(p),local=objectLocal(state,w);
+  if(isStructural(state))state.w=clamp(Math.round(local.x),20,2000);
+  else{state.w=clamp(Math.round(local.x*2),20,2000);state.h=clamp(Math.round(local.y*2),20,2000)}
+ }else if(drag.mode==='cone-range'){
+  const w=world(p),angle=rad(state.rotation??0),dx=w.x-state.x,dy=w.y-state.y;
+  const projection=dx*Math.cos(angle)+dy*Math.sin(angle);
+  state.coneRange=clamp(Math.round(projection),80,1100);
  }else if(drag.mode==='rotate'){
   const w=world(p);
   let angle=drag.initial.rotation+deg(Math.atan2(w.y-state.y,w.x-state.x))-drag.startAngle;
