@@ -100,6 +100,7 @@ const {chromium}=require('playwright'),sharp=require('sharp'),M=require('../app/
   await page.touchscreen.tap(canvas.x+canvas.width*.75,canvas.y+canvas.height*.25);
   assert.equal(await page.locator('.drawer.open').count(),0);
   // Changing static movement to actor movement preserves a genuinely scrolled panel.
+  await page.setViewportSize({width:900,height:720});
   await page.locator('[data-action="toggle-layers"]').click();
   await page.locator('[data-action="select-object"][data-kind="actor"][data-id="'+scene.actors[1].id+'"]').click();
   for(const pinned of [false,true]){
