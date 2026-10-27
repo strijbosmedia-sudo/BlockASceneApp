@@ -325,10 +325,12 @@ function modal(){
  return '';
 }
 
-let lastRenderedDialogKey='';
+let lastRenderedDialogKey='',lastRenderedInspectorKey='';
 function render(){
  ensureActive();
  const key=ui.dialog?ui.dialog.kind+':'+(ui.dialog.id||''):'';
+ const inspectorKey=ui.page==='editor'&&ui.showInspector?JSON.stringify([ui.projectId,ui.sceneId,ui.selection?.type||'',ui.selection?.id||'']):'';
+ const inspectorScroll=inspectorKey&&inspectorKey===lastRenderedInspectorKey?(app.querySelector?.('.inspector .inspect-body')?.scrollTop||0):0;
  // A background rerender must never discard unsaved text or the user's caret position.
  const preserved=new Map(),active=document.activeElement;
  let focusKey=null,caret=null;
@@ -356,6 +358,9 @@ function render(){
    else if(!focused&&target.select)target.select();
   }
  }
+ const inspectorBody=app.querySelector?.('.inspector .inspect-body');
+ if(inspectorBody)inspectorBody.scrollTop=inspectorScroll;
+ lastRenderedInspectorKey=inspectorKey;
  lastRenderedDialogKey=key;
 }
 function cached(src){if(!src)return null;let record=images.get(src);if(!record){record={ready:false,img:new Image()};images.set(src,record);record.img.onload=()=>{record.ready=true;paint()};record.img.onerror=()=>console.warn('Image could not be loaded');record.img.src=src}return record.ready?record.img:null}
@@ -819,6 +824,12 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
    }else projectInput.click();
   }else if(a==='select-bg'){ui.selection={type:'background'};ui.showInspector=true;ui.showMenu=false;render()}
  else if(a==='clear-bg'){checkpoint();set().background=null;images.clear();save();render()}else if(a==='export-image')await savePNG();else if(a==='export-zip')await saveZIP();else if(a==='export-video-dialog'){ui.showExportPanel=false;ui.videoDraft={...playbackOptions()};ui.dialog={kind:'video'};render()}else if(a==='confirm-video-export'){const c=ui.videoDraft||playbackOptions();project().playback=P.settings({...playbackOptions(),speed:Number(c.speed),holdMs:Number(c.holdMs),mode:c.mode});ui.videoDraft=null;ui.dialog=null;save();render();await saveVideo()}else if(a==='export-video')await saveVideo();else if(a==='save-project'){clearTimeout(saveTimer);await writeDB();await queuePreviews(project());notice('Project saved locally')}else if(a==='backup')backup()}
+// Dismiss on pointer-down for mouse, pen and touch, keeping the outside target intact.
+app.addEventListener('pointerdown',e=>{
+ if(!ui.showMenu||e.target.closest('.drawer,[data-action="toggle-menu"]'))return;
+ ui.showMenu=false;
+ for(const drawer of app.querySelectorAll?.('.drawer.open')||[])drawer.classList.remove('open');
+},true);
 app.addEventListener('click',action);
 app.addEventListener('scroll',e=>{if(ui.page==='manual'&&e.target?.classList?.contains('manual-content'))ui.manualScroll[ui.manualTab]=e.target.scrollTop},true);
 let panelPointer=null;

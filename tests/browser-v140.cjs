@@ -26,8 +26,22 @@ const {chromium}=require('playwright'),sharp=require('sharp'),M=require('../app/
   page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto('http://127.0.0.1:'+server.address().port+'/app/index.html');
   await page.locator('#startupSplash').waitFor({state:'hidden'});
+  // Workspace menu: internal taps keep it open; an outside button still receives its click.
+  await page.locator('.menu-toggle').click();
+  await page.locator('.drawer.open .drawer-head b').click();
+  assert.equal(await page.locator('.drawer.open').count(),1);
+  await page.locator('[data-action="library-view"][data-view="list"]').click();
+  assert.equal(await page.locator('.drawer.open').count(),0);
+  assert.ok((await page.locator('[data-action="library-view"][data-view="list"]').getAttribute('class')).includes('selected'));
+  await page.locator('[data-action="library-view"][data-view="grid"]').click();
   await page.locator('#projectFile').setInputFiles({name:'fixture.blockascene',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({format:'blockascene',version:2,project}))});
   await page.locator('.project-overview').waitFor();
+  // Project menu: dismiss without swallowing the Edit Project action.
+  await page.locator('.menu-toggle').click();
+  await page.locator('.project-edit-link').click();
+  assert.equal(await page.locator('.drawer.open').count(),0);
+  await page.locator('#entityEditName').waitFor();
+  await page.locator('.dialog-card header [data-action="close-dialog"]').click();
   await page.locator('.floor-card [data-action="open-context"][data-id="'+set.id+'"]').click();
   await page.locator('[data-action="context-action"][data-command="edit"]').click();
   await page.locator('#entityEditScale').waitFor();
@@ -81,9 +95,31 @@ const {chromium}=require('playwright'),sharp=require('sharp'),M=require('../app/
   // Actual touch input: selecting a fresh canvas object must not create or resize anything.
   const canvas=await page.locator('#stage').boundingBox();
   await page.touchscreen.tap(canvas.x+canvas.width*.75,canvas.y+canvas.height*.25);
+  // Editor menu supports touch dismissal without resetting the canvas.
+  await page.locator('.menu-toggle').click();
+  await page.touchscreen.tap(canvas.x+canvas.width*.75,canvas.y+canvas.height*.25);
+  assert.equal(await page.locator('.drawer.open').count(),0);
+  // Changing static movement to actor movement preserves a genuinely scrolled panel.
+  await page.locator('[data-action="toggle-layers"]').click();
+  await page.locator('[data-action="select-object"][data-kind="actor"][data-id="'+scene.actors[1].id+'"]').click();
+  for(const pinned of [false,true]){
+   if(pinned)await page.locator('[data-action="toggle-pin"][data-panel="properties"]').click();
+   await page.locator('select[name="motionKind"]').selectOption('static');
+   await page.locator('select[name="motionKind"]').scrollIntoViewIfNeeded();
+   const before=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
+   assert.ok(before>0,'Properties is scrolled before the movement change');
+   await page.locator('select[name="motionKind"]').selectOption('walk');
+   const after=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
+   assert.ok(Math.abs(after-before)<=1,'Movement change retains Properties scroll in '+(pinned?'pinned':'floating')+' layout');
+   await page.locator('select[name="motionPath"]').scrollIntoViewIfNeeded();
+   const pathBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
+   await page.locator('select[name="motionPath"]').selectOption('smooth');
+   assert.ok(Math.abs((await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop))-pathBefore)<=1,'Path changes retain Properties scroll');
+  }
+  await page.screenshot({path:path.join(out,'properties-scroll-retained.png'),fullPage:true});
   assert.equal(errors.length,0,errors.join('\n'));
   await page.screenshot({path:path.join(out,'reopened-project.png'),fullPage:true});
-  await fs.writeFile(path.join(out,'result.json'),JSON.stringify({passed:true,checks:['native browser project import','replacement image defaults to 100%','scale dialog','Wall/Window picker','rotated furniture dimensions','motion isolation','backup export','saved-project reopen','tablet layout','touch input'],pageErrors:errors},null,2));
+  await fs.writeFile(path.join(out,'result.json'),JSON.stringify({passed:true,checks:['browser project import','replacement image defaults to 100%','scale dialog','Wall/Window picker','rotated furniture dimensions','motion isolation','backup export','saved-project reopen','tablet layout','touch input','sidebar outside dismissal and click-through','floating and pinned Properties scroll retention'],pageErrors:errors},null,2));
   console.log('Chromium project import, scale, windows, rotated sizing, backup, reopen and tablet layout passed');
  }catch(error){
   if(page)await page.screenshot({path:path.join(out,'failure.png'),fullPage:true}).catch(()=>{});
