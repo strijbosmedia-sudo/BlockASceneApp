@@ -429,13 +429,43 @@ function draw(g,width,height,opts={}){const s=scene(),location=set();if(!s||!loc
  for(const e of s.equipment)drawEquipment(g,e,e.lockToSet?e.fixedState:b.equipment[e.id]);
  for(const c of s.cameras)drawCamera(g,c,b.cameras[c.id],false,opts.moves??ui.showCameraMoves,opts.cones??ui.showCones);
  for(const a of s.actors){if(opts.moves??ui.showCameraMoves)drawActorMove(g,a,b.positions[a.id]);drawActor(g,a,b.positions[a.id])}
- if(!exportMode&&ui.selection){const origin=selectionCenter(ui.selection,b);if(origin){const r=ringRadius(ui.selection,view.scale),color=detailsOf(ui.selection)?.color||'#EDEEF1';g.strokeStyle=color;g.globalAlpha=.92;g.lineWidth=2/view.scale;g.setLineDash([7/view.scale,6/view.scale]);g.beginPath();g.arc(origin.x,origin.y,r,0,Math.PI*2);g.stroke();g.setLineDash([]);g.fillStyle=color;g.beginPath();g.arc(origin.x+r*Math.cos(rad(stateOf(ui.selection)?.rotation||0)),origin.y+r*Math.sin(rad(stateOf(ui.selection)?.rotation||0)),6/view.scale,0,Math.PI*2);g.fill();if(drag?.mode==='rotate'){fillText(g,`${Math.round(M.normalizeAngle(stateOf(ui.selection)?.rotation||0))}°`,origin.x,origin.y+r+24/view.scale,14/view.scale,color)} }}
+ if(!exportMode&&ui.selection){const origin=selectionCenter(ui.selection,b);if(origin){const r=ringRadius(ui.selection,view.scale),color=detailsOf(ui.selection)?.color||'#EDEEF1';
+
+   const selectedState=stateOf(ui.selection);
+   if(selectedState?.motion){
+    const m=selectedState.motion;
+    paintDirectionHandle(g,{x:m.endX,y:m.endY},m.endRotation??selectedState.rotation,color,'END');
+    for(const k of m.keys||[]){
+     const active=ui.motionKeyId===k.id,size=(active?13:10)/view.scale;
+     g.save();g.translate(k.x,k.y);g.rotate(Math.PI/4);
+     g.fillStyle=active?'#F5F5F8':color;g.strokeStyle='#101114';g.lineWidth=2/view.scale;
+     g.fillRect(-size/2,-size/2,size,size);g.strokeRect(-size/2,-size/2,size,size);g.restore();
+     if(active)paintDirectionHandle(g,{x:k.x,y:k.y},k.rotation??0,color,'KEY');
+    }
+   }
+g.strokeStyle=color;g.globalAlpha=.92;g.lineWidth=2/view.scale;g.setLineDash([7/view.scale,6/view.scale]);g.beginPath();g.arc(origin.x,origin.y,r,0,Math.PI*2);g.stroke();g.setLineDash([]);g.fillStyle=color;g.beginPath();g.arc(origin.x+r*Math.cos(rad(stateOf(ui.selection)?.rotation||0)),origin.y+r*Math.sin(rad(stateOf(ui.selection)?.rotation||0)),6/view.scale,0,Math.PI*2);g.fill();if(drag?.mode==='rotate'){fillText(g,`${Math.round(M.normalizeAngle(stateOf(ui.selection)?.rotation||0))}°`,origin.x,origin.y+r+24/view.scale,14/view.scale,color)} }}
  g.restore();if(exportMode){g.fillStyle='#E6E8EE';g.font='700 26px sans-serif';g.fillText(`${s.name}  /  ${b.name}`,28,39)}
 }
 function paint(){if(!canvas?.isConnected||!wrap)return;const width=Math.max(1,Math.floor(wrap.clientWidth)),height=Math.max(1,Math.floor(wrap.clientHeight)),ratio=Math.min(devicePixelRatio||1,2);if(canvas.width!==Math.round(width*ratio)||canvas.height!==Math.round(height*ratio)){canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio)}ctx.setTransform(ratio,0,0,ratio,0,0);draw(ctx,width,height,playback.frame?{frame:playback.frame,mode:playbackOptions().mode}:{});const t=document.getElementById('zoomText');if(t)t.textContent=`TOP VIEW · ${Math.round(ui.view.scale*100)}%`;canvas.dataset.viewX=String(ui.view.x);canvas.dataset.viewY=String(ui.view.y);canvas.dataset.viewScale=String(ui.view.scale)}
 function hitAt(w){const sc=scene(),b=beat();if(!sc||!b)return null;
  // Selected object ring and camera path end take priority over object bodies.
- if(ui.selection){const o=stateOf(),center=selectionCenter(ui.selection,b);if(center){const r=ringRadius(ui.selection,ui.view.scale),d=Math.hypot(w.x-center.x,w.y-center.y),tol=13/ui.view.scale;if(Math.abs(d-r)<=tol)return{type:'rotate',selection:ui.selection};if(['camera','actor'].includes(ui.selection.type)&&o?.motion){const e=o.motion;if(Math.hypot(w.x-e.endX,w.y-e.endY)<=Math.max(16,16/ui.view.scale))return{type:'endpoint',selection:ui.selection}}}}
+ if(ui.selection){const o=stateOf(),center=selectionCenter(ui.selection,b);if(center){
+   const tol=Math.max(16,16/ui.view.scale);
+   if(['camera','actor'].includes(ui.selection.type)&&o?.motion){
+    const e=o.motion,handle=directionHandle({x:e.endX,y:e.endY},e.endRotation??o.rotation,68);
+    if(Math.hypot(w.x-handle.x,w.y-handle.y)<tol)return{type:'end-rotate',selection:ui.selection};
+    for(const k of e.keys||[]){
+     if(ui.motionKeyId===k.id){
+      const h=directionHandle(k,k.rotation,53);
+      if(Math.hypot(w.x-h.x,w.y-h.y)<tol)return{type:'key-rotate',keyId:k.id,selection:ui.selection};
+     }
+    }
+    for(const k of e.keys||[])if(Math.hypot(w.x-k.x,w.y-k.y)<tol)return{type:'keyframe',keyId:k.id,selection:ui.selection};
+    if(!['turn','pan'].includes(e.kind)&&Math.hypot(w.x-e.endX,w.y-e.endY)<tol)return{type:'endpoint',selection:ui.selection};
+   }
+   const r=ringRadius(ui.selection,ui.view.scale),d=Math.hypot(w.x-center.x,w.y-center.y);
+   if(Math.abs(d-r)<=13/ui.view.scale)return{type:'rotate',selection:ui.selection};
+ }}
  for(let i=sc.actors.length-1;i>=0;i--){const a=sc.actors[i],v=b.positions[a.id];if(v?.visible!==false&&v&&Math.hypot(w.x-v.x,w.y-v.y)<=Math.max(24,19/ui.view.scale))return{type:'object',selection:{type:'actor',id:a.id}}}
  for(let i=sc.cameras.length-1;i>=0;i--){const c=sc.cameras[i],v=b.cameras[c.id];if(v?.visible!==false&&v&&Math.hypot(w.x-v.x,w.y-v.y)<=Math.max(30,22/ui.view.scale))return{type:'object',selection:{type:'camera',id:c.id}}}
  for(let i=sc.equipment.length-1;i>=0;i--){const e=sc.equipment[i],v=e.lockToSet?e.fixedState:b.equipment[e.id];if(v?.visible!==false&&v&&Math.hypot(w.x-v.x,w.y-v.y)<=Math.max(32,24/ui.view.scale))return{type:'object',selection:{type:'equipment',id:e.id}}}
