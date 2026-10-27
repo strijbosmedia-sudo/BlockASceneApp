@@ -541,3 +541,54 @@ input:hover,select:hover{border-color:#676b75}
  .timeline{height:155px}
  .beat-chip{flex-basis:142px}
 }
+
+/* Stage 2 / V4: unified dialogs, safe confirmation and manual */
+.context-mask{background:transparent}
+.context-menu{background:#25272d;border:1px solid #4a4d56;border-radius:11px;padding:7px;min-width:200px}
+.context-menu .context-title{color:#9da1ab;font-size:10px;letter-spacing:1.4px;padding:9px 12px 8px}
+.context-menu button{display:block;min-height:42px;width:100%;text-align:left;background:transparent;border-radius:7px;padding:10px 12px;color:#d8d9de;font-size:12px}
+.context-menu button:hover,.context-menu button:focus-visible{background:#343740}
+.context-menu .is-danger{color:#f08991}
+.context-menu .is-danger:hover{background:#42272d}
+.dialog-card{background:#22252b;border-color:#484b54;border-radius:16px;color:#eaecf0;box-shadow:0 28px 88px #000b}
+.dialog-card header{border-bottom:1px solid #3b3e46;margin:0 0 19px;padding-bottom:14px}
+.dialog-card header h2{font-size:21px;font-weight:680;margin:0}
+.dialog-card header button{width:35px;height:35px;min-width:35px;background:#303239;border-radius:8px}
+.dialog-card header button:hover{background:#434650}
+.dialog-card .field{margin-bottom:15px}
+.dialog-card .field>span{font-size:11px;letter-spacing:.1px;margin-bottom:3px;color:#b7bbc3}
+.dialog-card input:focus-visible,.dialog-card select:focus-visible{outline:2px solid #bc424e;outline-offset:1px}
+.dialog-actions{border-top:1px solid #3d4047;padding-top:17px;margin-top:19px}
+.dialog-actions button{background:#32353c;border:1px solid #4b4e57;border-radius:9px;min-height:42px;padding:10px 16px;font-size:12px}
+.dialog-actions button:hover{background:#454750}
+.dialog-actions .dialog-confirm{background:#c83340;border-color:#c83340;color:#fff}
+.dialog-actions .dialog-confirm:hover{background:#e04853}
+.confirm-card{width:min(460px,100%);padding:25px 26px}
+.confirm-symbol{display:grid;place-items:center;width:49px;height:49px;border:1px solid #6c3640;background:#3b232b;border-radius:11px;color:#fa8990;margin-bottom:19px}
+.confirm-symbol .b4-icon{width:23px;height:23px}
+.confirm-card h2{font-size:22px;letter-spacing:-.04em;margin:0 0 11px}
+.confirm-card p{font-size:13px;line-height:1.65;color:#afb2bc;margin:0}
+.confirm-card p strong{color:#edf0f2}
+.confirm-card .dialog-actions{margin-top:24px}
+.confirm-card .dialog-actions .danger-confirm{background:#aa2634;border-color:#bc3844;color:#fff}
+.confirm-card .dialog-actions .danger-confirm:hover{background:#c53745}
+.manual-app{background:#101114}
+.manual-topbar{border-bottom-color:#34373f}
+.manual-top-label{letter-spacing:1.7px;font-size:10px;color:#8b8f9a}
+.manual-intro .manual-eyebrow{color:#d3525f}
+.manual-intro h1{color:#f2f2f4}
+.manual-intro h1 span{color:#a5aab3}
+.manual-nav{background:#1b1d22;border:1px solid #3b3d45;border-radius:11px;overflow:hidden}
+.manual-tab{padding:16px 14px;border-left:3px solid transparent}
+.manual-tab.active{background:#32272c;border-left-color:#d94856}
+.manual-content{background:#181a1f;border:1px solid #373a42;border-radius:12px;padding:23px 28px!important;max-width:820px}
+.manual-content h2{font-size:clamp(24px,2.8vw,34px)}
+.manual-section ul{color:#c0c3ca}
+.manual-shortcuts dt{color:#edeef1}
+.manual-shortcuts dd{color:#a4a8b2}
+@media(max-width:740px){
+ .manual-nav{border-radius:9px;max-height:70px!important}
+ .manual-content{padding:17px 16px!important}
+ .dialog-card{max-height:calc(100vh - 32px)}
+ .preview-editor-image{aspect-ratio:16/9}
+}
