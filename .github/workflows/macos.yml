@@ -1,0 +1,39 @@
+name: Build macOS (Intel + Apple Silicon)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'desktop/**'
+      - 'scripts/**'
+      - 'package.json'
+      - '.github/workflows/macos.yml'
+permissions:
+  contents: read
+jobs:
+  macos:
+    runs-on: macos-latest
+    timeout-minutes: 50
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Test core editor
+        run: npm run test:model
+      - name: Build DMG and ZIP (Intel and Apple Silicon)
+        run: npm run dist:mac
+      - name: Upload macOS files
+        uses: actions/upload-artifact@v4
+        with:
+          name: Block4Film-macOS
+          path: |
+            dist/*.dmg
+            dist/*.zip
+          if-no-files-found: error
+          retention-days: 30
