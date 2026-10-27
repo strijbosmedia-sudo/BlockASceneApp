@@ -172,3 +172,40 @@ input[type=range],input[type=checkbox]{accent-color:var(--brand-red)}
 /* Floating windows stand beside each other when both are open. */
 .work-canvas:has(.inspector:not(.docked)) .layers-pop:not(.docked){right:calc(59px + 310px)}
 @media(max-width:720px){.work-canvas:has(.inspector:not(.docked)) .layers-pop:not(.docked){right:55px}}
+
+/* v1.1.1 function fixes: floating panels never cover pinned neighbors. */
+.work-canvas:has(.layers-pop.docked) .inspector:not(.docked){
+  right:calc(59px + var(--b4-layers-width, 290px) + 12px);
+  max-width:calc(100% - var(--b4-layers-width, 290px) - 150px);
+}
+.work-canvas:has(.inspector.docked) .layers-pop:not(.docked){
+  right:calc(59px + var(--b4-properties-width, 300px) + 12px);
+  max-width:calc(100% - var(--b4-properties-width, 300px) - 150px);
+}
+.work-canvas:has(.inspector:not(.docked)) .layers-pop:not(.docked){
+  right:calc(59px + var(--b4-properties-width, 300px) + 12px);
+}
+.set-dialog-actions{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:12px 0 16px}
+.set-dialog-actions button{border:1px solid #4a4c55;background:#31323a;border-radius:8px;padding:10px 12px;min-height:42px;font-size:12px}
+.set-dialog-actions small{width:100%;font-size:11px;color:#9698a3}
+
+/* Manual: page masthead and topic navigation remain fixed; only chapter body scrolls. */
+.manual-app .manual-page{display:flex;flex-direction:column;overflow:hidden;min-height:0;padding-bottom:22px;}
+.manual-app .manual-intro{flex:none;margin-bottom:22px}
+.manual-app .manual-layout{display:grid;flex:1;min-height:0;overflow:hidden;align-items:stretch;grid-template-columns:minmax(180px,255px) minmax(0,760px)}
+.manual-app .manual-nav{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.manual-app .manual-content{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:4px 16px 20px 0;scrollbar-width:thin}
+@media(max-width:740px){
+ .manual-app .manual-page{padding-bottom:9px}
+ .manual-app .manual-intro{margin-bottom:10px}
+ .manual-app .manual-layout{display:flex;flex-direction:column;gap:8px}
+ .manual-app .manual-nav{flex:none;min-height:54px;max-height:65px;overflow-x:auto;overflow-y:hidden}
+ .manual-app .manual-content{flex:1;min-height:0;padding:0 10px 18px 0}
+}
+@media(max-width:850px){
+ .work-canvas:has(.layers-pop.docked) .inspector:not(.docked),
+ .work-canvas:has(.inspector.docked) .layers-pop:not(.docked),
+ .work-canvas:has(.inspector:not(.docked)) .layers-pop:not(.docked){
+  right:55px;max-width:calc(100vw - 115px)
+ }
+}
