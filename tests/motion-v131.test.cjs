@@ -71,7 +71,7 @@ h.onDown(evt(keyX,keyY));assert.equal(h.getDrag().mode,'keyframe');
 h.onMove(evt(keyX+30,keyY+15));h.onUp(evt(keyX+30,keyY+15));
 approx(key.x,keyX+30);approx(key.y,keyY+15);
 h.ui.selection={type:'camera',id:cam};
-const r=Math.max(68,42/h.ui.view.scale),angle=c.motion.endRotation*Math.PI/180;
+const r=Math.max(40,30/h.ui.view.scale),angle=c.motion.endRotation*Math.PI/180;
 const tx=c.motion.endX+r*Math.cos(angle),ty=c.motion.endY+r*Math.sin(angle);
 h.onDown(evt(tx,ty));assert.equal(h.getDrag().mode,'end-rotate');
 h.onMove(evt(c.motion.endX-r,c.motion.endY));h.onUp(evt(c.motion.endX-r,c.motion.endY));
