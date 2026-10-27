@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const projectDataDir=path.join(app.getPath('appData'),'BlockaScene');
 fs.mkdirSync(projectDataDir,{recursive:true});
 app.setPath('userData',projectDataDir);
-app.whenReady().then(()=>{
+function createWindow(){
   const window = new BrowserWindow({
     width:1480,height:920,minWidth:860,minHeight:580,
     backgroundColor:'#000000',title:'Block4Film',
@@ -14,5 +14,7 @@ app.whenReady().then(()=>{
     webPreferences:{nodeIntegration:false,contextIsolation:true,sandbox:true}
   });
   window.loadFile(path.join(__dirname,'..','app','index.html'));
-});
+}
+app.whenReady().then(createWindow);
+app.on('activate',()=>{if(BrowserWindow.getAllWindows().length===0)createWindow()});
 app.on('window-all-closed',()=>{if(process.platform!=='darwin')app.quit();});

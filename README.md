@@ -95,3 +95,15 @@ The GitHub repository name intentionally remains `BlockASceneApp` for link compa
 - Startup splash is visible for at least 1.75 seconds.
 - Offline manual with seven clickable chapters appears in editor Menu and on the project dashboard.
 - Windows v1 is the release checkpoint; macOS and Android APK packaging follow later.
+
+## Cross-platform test builds (macOS and Android)
+
+The existing **Windows portable EXE** workflow is preserved. On GitHub Actions, **Build macOS (Intel + Apple Silicon)** produces DMG/ZIP builds and **Build Android APK** produces a sideloadable debug-signed APK. Both share this editor and project backup format.
+
+Mac beta builds are **unsigned/unnotarized**, so Gatekeeper may block first launch. Signing/notarization is needed for normal public distribution. The Android APK is **debug-signed for testing**, not a Play Store release; production releases need your own persistent signing key.
+
+Android project setup happens reproducibly during CI from `capacitor.config.json` and the `app/` web assets. Exports use Android native file sharing. Autosaved projects are device-local; transfer projects using `.blockascene` export/import. Android hardware testing (particularly WebM export and file sharing) is still required.
+
+Actions artifacts expire. Publish verified Windows, Mac, and Android binaries under **GitHub Releases** for permanent download links.
+
+Local commands: `npm install && npm run dist:mac` on a Mac; `npm install && npm run android:prepare` for Android, then `cd android && ./gradlew assembleDebug`.
