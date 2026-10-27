@@ -46,7 +46,24 @@ function createProject(name='Untitled Film'){
  const makeBeat=(name,ax,ay,cx,cy)=>({id:uid(),name,positions:{[a.id]:defaultActorState(ax,ay),[b.id]:defaultActorState(750,360)},cameras:{[c1.id]:{...defaultCameraState(cx,600),rotation:-83},[c2.id]:{...defaultCameraState(850,545),rotation:-132,lens:50,visible:false}},equipment:{}});
  const scene={id:uid(),name:'01 · The Conversation',setId:set.id,actors:[actor1,actor2],cameras:[cam1,cam2],equipment:[],beats:[makeBeat('Entrance',310,535,480),makeBeat('Approach',450,430,480),makeBeat('Dialogue',550,295,650)]};scene.beats[2].cameras[c2.id].visible=true;p.scenes.push(scene);return p;
 }
-function nextBeat(scene,current){const idx=scene.beats.findIndex(b=>b.id===current?.id),previous=current||scene.beats[scene.beats.length-1];const beat={id:uid(),name:`Beat ${String(scene.beats.length+1).padStart(2,'0')}`,positions:clone(previous?.positions||{}),cameras:clone(previous?.cameras||{}),equipment:clone(previous?.equipment||{})};scene.beats.splice(idx<0?scene.beats.length:idx+1,0,beat);return beat}
+function finalBeatState(state){
+ const result=clone(state||{});
+ if(result.motion){
+  const m=result.motion;
+  if(Number.isFinite(Number(m.endX)))result.x=Number(m.endX);
+  if(Number.isFinite(Number(m.endY)))result.y=Number(m.endY);
+  if(Number.isFinite(Number(m.endRotation)))result.rotation=normalizeAngle(m.endRotation);
+  result.motion=null;
+ }
+ return result;
+}
+function nextBeat(scene,current){
+ const idx=scene.beats.findIndex(b=>b.id===current?.id),previous=current||scene.beats[scene.beats.length-1];
+ const endMap=source=>Object.fromEntries(Object.entries(source||{}).map(([id,state])=>[id,finalBeatState(state)]));
+ const beat={id:uid(),name:`Beat ${String(scene.beats.length+1).padStart(2,'0')}`,
+  positions:endMap(previous?.positions),cameras:endMap(previous?.cameras),equipment:clone(previous?.equipment||{})};
+ scene.beats.splice(idx<0?scene.beats.length:idx+1,0,beat);return beat;
+}
 function nextAvailableNumber(scene,type){
  const list=type==='actor'?scene.actors:type==='camera'?scene.cameras:[];
  const used=new Set(list.map(o=>Number(o.number)).filter(v=>Number.isSafeInteger(v)&&v>0));
@@ -101,5 +118,5 @@ function setBeatVisibility(scene,type,id,beatId,visible){
 }
 function setOutline(project,id,outline){if(!['white','black'].includes(outline))return false;const item=project.identities?.[id];if(item)item.outline=outline;for(const s of project.scenes)for(const v of [...s.actors,...s.cameras])if(v.id===id)v.outline=outline;return true}
 function rename(project,id,newName){const info=project.identities?.[id];if(info)info.name=newName;for(const scene of project.scenes)for(const entity of [...scene.actors,...scene.cameras,...scene.equipment])if(entity.id===id)entity.name=newName}
-return {VERSION,PRESET,clone,uid,label,normalizeAngle,register,applyIdentity,uniqueColor,migrate,createProject,nextBeat,addIdentity,nextAvailableNumber,numberAvailable,setIdentityNumber,recolor,rename,setOutline,setBeatVisibility,defaultActorState,defaultCameraState,defaultEquipmentState};
+return {VERSION,PRESET,clone,uid,label,normalizeAngle,register,applyIdentity,uniqueColor,migrate,createProject,nextBeat,finalBeatState,addIdentity,nextAvailableNumber,numberAvailable,setIdentityNumber,recolor,rename,setOutline,setBeatVisibility,defaultActorState,defaultCameraState,defaultEquipmentState};
 });
