@@ -1,4 +1,4 @@
-# Block4Film v0.3.1
+# Block4Film v0.3.2
 
 **Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor for Windows, desktop browsers and touch tablets.
 
@@ -37,7 +37,7 @@ No AI, 3D, or simulated advanced lighting. Cross-device live sync is not yet imp
 
 ## Windows portable download
 
-Open the repository's **Actions** tab, choose the latest successful **Build Windows portable EXE** workflow run on `main`, and download `BlockaScene-Windows-Portable` under **Artifacts**. Extract and launch the `.exe`. GitHub sign-in may be required. The unsigned test executable may trigger a Windows security prompt.
+Open the repository's **Actions** tab, choose the latest successful **Build Windows portable EXE** workflow run on `main`, and download `Block4Film-Windows-Portable` under **Artifacts**. Extract and launch the `.exe`. GitHub sign-in may be required. The unsigned test executable may trigger a Windows security prompt.
 
 ## Source development
 
@@ -77,3 +77,14 @@ See `docs/V02-REDESIGN.md` for behavior details and `docs/PRODUCT_BLUEPRINT_v0.3
 - Less panel chrome and simpler, flatter workspace surfaces; Select and Pan remain available in the toolbar.
 
 The GitHub repository name intentionally remains `BlockASceneApp` for link compatibility. The app presented to users is now **Block4Film**.
+
+## v0.3.2 visual identity and navigation
+
+- Original designer-supplied vector icon: `app/assets/Block4Film-Icon.svg`.
+- Original designer-supplied vector wordmark: `app/assets/Block4Film-Wordmark.svg`.
+- Black startup screen displays both artwork files and respects reduced motion.
+- `npm run icons` generates the multi-size Windows executable `.ico` and matching window `.png` from the SVG, and runs automatically before Electron and Windows packaging.
+- The top-bar Home button goes directly to All Projects, leaving Menu unchanged.
+- Existing project storage and the application's identity remain unchanged.
+
+**Portable EXE:** The app runs on compatible Windows PCs without an installer, but projects remain stored locally on each machine. Use `.blockascene` export/import to transfer them.
