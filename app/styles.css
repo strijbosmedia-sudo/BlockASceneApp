@@ -622,3 +622,16 @@ input:hover,select:hover{border-color:#676b75}
 .back-nav:disabled{opacity:.36;cursor:default;pointer-events:none}
 .identity-number-field select{min-width:125px;max-width:210px}
 .identity-number-field>small{display:block;margin-top:5px;color:#9296a1;font-size:11px;line-height:1.4}
+
+/* v1.3.1 motion keyframe editor in the existing cinematic Properties panel */
+.keyframe-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:12px 0 8px}
+.keyframe-head strong{font-size:12px;letter-spacing:.015em;color:#e5e6eb}
+.keyframe-head b{font-size:11px;color:#b7bbc5}
+.keyframe-row{background:#25272d;border:1px solid #393c45;border-radius:9px;padding:10px;margin:8px 0}
+.keyframe-row .keyframe-head{margin:0 0 8px}
+.keyframe-row .keyframe-head button{border:1px solid #41454f;background:#2e3139;border-radius:7px;color:#e3e5e9;padding:3px 10px;min-height:30px;font-size:17px;cursor:pointer}
+.keyframe-row .two-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-top:8px}
+.keyframe-row .field{min-width:0;margin:0}
+.keyframe-row input{min-width:0;width:100%;box-sizing:border-box}
+.keyframe-row input:focus-visible{outline:2px solid #c64653;outline-offset:1px}
+.keyframe-head .small{min-height:32px;touch-action:manipulation}
