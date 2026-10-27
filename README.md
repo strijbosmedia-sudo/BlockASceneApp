@@ -1,4 +1,4 @@
-# Block4Film v1.1.0 (Functional Stage 1)
+# Block4Film v1.1.1 (Functional Fixes)
 
 **Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor currently developed and distributed for Windows.
 
@@ -140,3 +140,7 @@ We are intentionally pausing macOS and Android distribution while refining the W
 - Confirm Windows EXE packaging and download.
 - User should additionally smoke-test the scene editor and video export on a real Windows computer.
 
+
+## v1.1.1 functional bugfix release
+
+See [the detailed change list](docs/V111-FIXES.md).
