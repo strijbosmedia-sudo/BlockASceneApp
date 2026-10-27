@@ -134,7 +134,39 @@ function modal(){
  return '';
 }
 
-function render(){ensureActive();app.innerHTML=ui.page==='manual'?manualPage():!project()?dashboard():ui.page==='project'?projectOverview():editor();if(ui.page==='editor'&&scene())initCanvas();if(ui.page==='manual'){const pane=app.querySelector('.manual-content');if(pane)pane.scrollTop=ui.manualScroll[ui.manualTab]||0}}
+let lastRenderedDialogKey='';
+function render(){
+ ensureActive();
+ const key=ui.dialog?ui.dialog.kind+':'+(ui.dialog.id||''):'';
+ // A background rerender must never discard unsaved text or the user's caret position.
+ const preserved=new Map(),active=document.activeElement;
+ let focusKey=null,caret=null;
+ if(key&&lastRenderedDialogKey===key){
+  for(const field of app.querySelectorAll?.('.dialog-card input,.dialog-card select,.dialog-card textarea')||[]){
+   const id=field.id||field.name;if(!id)continue;
+   preserved.set(id,{value:field.value,checked:field.checked});
+   if(field===active){focusKey=id;if(typeof field.selectionStart==='number')caret=[field.selectionStart,field.selectionEnd]}
+  }
+ }
+ app.innerHTML=ui.page==='manual'?manualPage():!project()?dashboard():ui.page==='project'?projectOverview():editor();
+ if(ui.page==='editor'&&scene())initCanvas();
+ if(ui.page==='manual'){const pane=app.querySelector('.manual-content');if(pane)pane.scrollTop=ui.manualScroll[ui.manualTab]||0}
+ if(key){
+  for(const field of app.querySelectorAll?.('.dialog-card input,.dialog-card select,.dialog-card textarea')||[]){
+   const saved=preserved.get(field.id||field.name);if(!saved)continue;
+   if(field.type==='checkbox'||field.type==='radio')field.checked=saved.checked;else field.value=saved.value;
+  }
+  const fields=app.querySelectorAll?.('.dialog-card input,.dialog-card select,.dialog-card textarea')||[];
+  const focused=focusKey?[...fields].find(el=>(el.id||el.name)===focusKey):null;
+  const target=focused||(key!==lastRenderedDialogKey?app.querySelector('#entityEditName')||app.querySelector('#beatEditName'):null);
+  if(target?.focus){
+   target.focus({preventScroll:true});
+   if(focused&&caret&&typeof target.setSelectionRange==='function')try{target.setSelectionRange(caret[0],caret[1])}catch{}
+   else if(!focused&&target.select)target.select();
+  }
+ }
+ lastRenderedDialogKey=key;
+}
 function cached(src){if(!src)return null;let record=images.get(src);if(!record){record={ready:false,img:new Image()};images.set(src,record);record.img.onload=()=>{record.ready=true;paint()};record.img.onerror=()=>console.warn('Image could not be loaded');record.img.src=src}return record.ready?record.img:null}
 function initCanvas(){canvas=document.getElementById('stage');wrap=document.getElementById('canvasWrap');ctx=canvas.getContext('2d');pointers.clear();drag=null;pinch=null;if(ui.autoFit){fitView();ui.autoFit=false}canvas.addEventListener('pointerdown',onDown);canvas.addEventListener('pointermove',onMove);canvas.addEventListener('pointerup',onUp);canvas.addEventListener('pointercancel',onUp);canvas.addEventListener('wheel',wheel,{passive:false});canvas.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()});paint()}
 function fitView(){if(!wrap)return;const r=wrap.getBoundingClientRect(),scale=Math.max(.15,Math.min((r.width-65)/W,(r.height-35)/H,1.8));ui.view={scale,x:(r.width-W*scale)/2,y:(r.height-H*scale)/2}}
