@@ -635,3 +635,23 @@ input:hover,select:hover{border-color:#676b75}
 .keyframe-row input{min-width:0;width:100%;box-sizing:border-box}
 .keyframe-row input:focus-visible{outline:2px solid #c64653;outline-offset:1px}
 .keyframe-head .small{min-height:32px;touch-action:manipulation}
+
+/* v1.3.2: Motion keyframes stay in the Properties scroller; no layout spill
+   into the right-side utility rail or Scene Beats timeline. */
+.work-canvas{min-width:0;min-height:0}
+.work-canvas>.inspector,.work-canvas>.layers-pop{
+ min-height:0;box-sizing:border-box;overflow:hidden;
+}
+.work-canvas>.inspector .inspect-body{
+ flex:1 1 auto;min-height:0;min-width:0;
+ overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;
+}
+.motion-keyframe-list{display:block;min-width:0;width:100%}
+.motion-keyframe-list .keyframe-row{min-width:0}
+@media(max-width:850px){
+ .work-canvas>.inspector,.work-canvas>.layers-pop{
+  position:absolute;max-height:min(55%,480px);z-index:7;
+ }
+ .work-canvas>.inspector .inspect-body{display:block!important;overflow-y:auto!important}
+ .work-canvas>.utility-rail{z-index:9;flex-shrink:0;align-self:stretch}
+}
