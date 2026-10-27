@@ -5,6 +5,9 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/release.yml'
+      - 'app/**'
+      - 'desktop/**'
+      - 'package.json'
 permissions:
   contents: write
 jobs:
@@ -39,8 +42,7 @@ jobs:
       - name: Publish Windows release and retire cross-platform beta
         env:
           GH_TOKEN: ${{ github.token }}
-          WINDOWS_TAG: v1.0.0-windows
-          LEGACY_TAG: v1.0.0-crossplatform-beta.1
+          WINDOWS_TAG: v1.1.0-functional-beta.1
         run: |
           set -euo pipefail
           ls -lh release-assets/*.exe
@@ -49,11 +51,8 @@ jobs:
           else
             gh release create "$WINDOWS_TAG" release-assets/*.exe \
               --target "$GITHUB_SHA" \
-              --title "Block4Film 1.0.0 - Windows Portable" \
-              --notes "Windows-only portable Block4Film. macOS and Android packaging are paused. Your project files remain compatible; export backups before updating." \
-              --latest
+              --title "Block4Film 1.1.0 - Functional Beta" \
+              --notes "Windows-only v1.1 functional beta (F1-F4). The verified v1.0 Windows release remains available as a stable fallback. Back up projects and test before replacing your working EXE." \
+              --prerelease
           fi
           gh release view "$WINDOWS_TAG" --json assets --jq '.assets[].name' | grep -qE '\.exe$'
-          if gh release view "$LEGACY_TAG" > /dev/null 2>&1; then
-            gh release delete "$LEGACY_TAG" --yes --cleanup-tag
-          fi

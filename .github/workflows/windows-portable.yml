@@ -1,6 +1,13 @@
 name: Build Windows portable EXE
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'desktop/**'
+      - 'package.json'
+      - 'tests/**'
   push:
     branches: [main]
     paths:
