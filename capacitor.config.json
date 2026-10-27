@@ -1,0 +1,9 @@
+{
+  "appId": "media.strijbos.block4film",
+  "appName": "Block4Film",
+  "webDir": "mobile/www",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "capacitor"
+  }
+}
