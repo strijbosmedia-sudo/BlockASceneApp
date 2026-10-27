@@ -19,7 +19,11 @@
     "electron": "^38.0.0",
     "electron-builder": "^26.0.0",
     "sharp": "^0.34.3",
-    "@capacitor/cli": "^8.0.0"
+    "@capacitor/cli": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/filesystem": "^8.0.0",
+    "@capacitor/share": "^8.0.0"
   },
   "build": {
     "appId": "film.blockascene.app",
@@ -54,11 +58,5 @@
       "notarize": false,
       "artifactName": "Block4Film-${version}-macOS-${arch}.${ext}"
     }
-  },
-  "dependencies": {
-    "@capacitor/core": "^8.0.0",
-    "@capacitor/android": "^8.0.0",
-    "@capacitor/filesystem": "^8.0.0",
-    "@capacitor/share": "^8.0.0"
   }
 }
