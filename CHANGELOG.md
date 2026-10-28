@@ -2,11 +2,22 @@
 
 Publisher: **strijbos.media**
 
+## 1.5.0 beta — October 28, 2026
+
+- Direct actor/camera movement switching; previous positional endpoint follows the next beat's start, preserving keys and avoiding cascades.
+- Explicit left/right rotation, relevant rotation-only controls, final camera cone and actor facing indicators, clearer rotation rings.
+- Visibility fades at the visible pose and ghosts only for objects visible in both beats; Repeat One and Repeat All preview controls with finite video exports.
+- Properties groups retain their expansion state; nested visibility and outer panel scroll stay in place. Compact portrait panels use tabs below the canvas.
+- Free duplicate/custom HEX colors; round/square columns with editable size.
+- Project sensor width/height and lens defaults; reusable actor/camera libraries, independent scene instances, explicit global preset updates and local overrides.
+- Awaited native cached-file sharing, cancellation/error feedback, and whole-project import/export in Project Settings, including presets.
+- Extended model, interaction and real-browser regression coverage. Physical tablet share/upgrade acceptance and production Android signing remain required before stable promotion.
+
 ## Current checkpoint — 1.4.1 stable
 
 **Accepted by the user on October 27, 2026**, after checking the new functions and the sidebar/Properties fixes. Version 1.4.1 is the current accepted stable application baseline for real-project planning and the next period of stress testing.
 
-**Development freeze:** collect bug notes during the user's project planning over the coming days. Make no further application, design, dependency, packaging or feature changes until the user returns with feedback and agrees the next fixes. This changelog update changes documentation only.
+The user returned with testing feedback and authorized implementation on October 28, 2026. The accepted 1.4.1 work is merged in PR #20; 1.5.0 remains a separate candidate pending device acceptance.
 
 The accepted application code is commit [747c896](https://github.com/strijbosmedia-sudo/BlockASceneApp/commit/747c8967b5ceeec9b23f1cc498ce7d431006f312), in [PR #20](https://github.com/strijbosmedia-sudo/BlockASceneApp/pull/20). Stable acceptance records the tested application behavior; it does not itself merge the PR, publish a new release or change platform signing.
 
