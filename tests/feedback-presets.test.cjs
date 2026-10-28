@@ -1,0 +1,46 @@
+const assert=require('node:assert/strict'),M=require('../app/model.js'),harness=require('./feedback-harness.cjs');
+const p=M.migrate(M.createProject('Libraries')),s=p.scenes[0],b=s.beats[0];
+const oldCameras=M.clone(s.beats.map(b=>b.cameras));
+p.cameraDefaults={sensorFormat:'custom',sensorWidth:31.2,sensorHeight:17.6,lens:65};
+const camera=M.addIdentity(p,s,'camera',b,{x:150,y:250});
+for(const beat of s.beats){assert.equal(beat.cameras[camera.id].sensor,31.2);assert.equal(beat.cameras[camera.id].lens,65)}
+for(let i=0;i<s.beats.length;i++)for(const [id,state] of Object.entries(oldCameras[i]))assert.deepEqual(s.beats[i].cameras[id],state,'Changing defaults leaves authored cameras untouched');
+const preset=M.createPreset(p,'camera',{name:'A camera',number:camera.number,color:'#abc',id:'untrusted',type:'actor'});
+assert.notEqual(preset.id,'untrusted');assert.equal(preset.type,'camera');assert.equal(preset.color,'#AABBCC');
+const poses=JSON.stringify(s.beats.map(b=>({x:b.cameras[camera.id].x,y:b.cameras[camera.id].y,rotation:b.cameras[camera.id].rotation})));
+assert.equal(M.applyPreset(p,s,'camera',camera.id,preset.id),null);
+const other=M.clone(s);other.id=M.uid();other.beats.forEach(b=>b.id=M.uid());p.scenes.push(other);
+const shared=other.cameras.find(c=>c.id===camera.id),oldId=shared.id;
+assert.equal(M.applyPreset(p,other,'camera',oldId,preset.id),null);
+assert.notEqual(shared.id,oldId,'Reusing a preset detaches a legacy shared scene identity');
+other.beats[0].cameras[shared.id].x=933;other.beats[0].cameras[shared.id].motion={kind:'track',endX:500,endY:550,endRotation:20,keys:[{id:'authored',t:.5,x:600,y:300,rotation:30}]};
+const authored=M.clone(other.beats[0].cameras[shared.id]);
+M.rename(p,shared.id,'Scene B camera');M.recolor(p,shared.id,'#123456');
+const override=other.beats[0].cameras[shared.id];override.lens=90;M.markPresetOverride(shared,'lens',other.beats[0].id);override.sensor=29;M.markPresetOverride(shared,'sensorWidth',other.beats[0].id);
+assert.equal(M.updatePreset(p,'camera',preset.id,{name:'Global camera',color:'#654321',lens:50,sensorWidth:36,sensorHeight:24,sensorFormat:'full-frame'}),null);
+assert.equal(camera.name,'Global camera');assert.equal(camera.color,'#654321');
+assert.equal(shared.name,'Scene B camera');assert.equal(shared.color,'#123456');assert.equal(override.lens,90);assert.equal(override.sensor,29);assert.equal(override.sensorFormat,'custom');
+assert.equal(other.beats[1].cameras[shared.id].lens,50);assert.equal(other.beats[1].cameras[shared.id].sensor,36);
+assert.equal(override.x,authored.x);assert.equal(override.rotation,authored.rotation);assert.deepEqual(override.motion,authored.motion);
+assert.equal(JSON.stringify(s.beats.map(b=>({x:b.cameras[camera.id].x,y:b.cameras[camera.id].y,rotation:b.cameras[camera.id].rotation}))),poses,'Global updates cannot move cameras');
+const added=M.nextBeat(other,other.beats[0]);assert.equal(shared.presetBeatOverrides[added.id].lens,true,'New beats inherit deliberate lens overrides');
+const collision=M.clone(p),cp=collision.presets.cameras[0],cs=collision.scenes[0];
+const before=JSON.stringify(collision);assert.match(M.updatePreset(collision,'camera',cp.id,{number:cs.cameras[0].number}),/conflicts/);assert.equal(JSON.stringify(collision),before,'Failed global edits are atomic');
+const copy=M.clone(other),map={};copy.beats.forEach(b=>{const old=b.id;b.id=M.uid();map[old]=b.id});M.remapPresetBeats(copy,map);
+const copied=copy.cameras.find(c=>c.presetId===preset.id);assert.equal(copied.presetBeatOverrides[copy.beats[0].id].lens,true);assert.equal(copied.presetBeatOverrides[other.beats[0].id],undefined);
+const restored=M.migrate(JSON.parse(JSON.stringify({project:p})).project);assert.deepEqual(restored.presets,p.presets);assert.deepEqual(restored.cameraDefaults,p.cameraDefaults);assert.deepEqual(restored.scenes.map(s=>s.beats),p.scenes.map(s=>s.beats),'Backup/import retains every pose, key, visibility and configuration');
+assert.equal(M.resetPresetOverrides(p,other,'camera',shared.id),null);assert.equal(shared.name,preset.name);assert.equal(override.lens,50);assert.deepEqual(override.motion,authored.motion);
+const snapshot=M.clone(other);assert.equal(M.removePreset(p,'camera',preset.id),true);assert.equal(shared.presetId,undefined);assert.deepEqual(other.beats,snapshot.beats);assert.equal(shared.name,snapshot.cameras.find(c=>c.id===shared.id).name);
+const saveProject=M.createProject(),saveScene=saveProject.scenes[0],cam=saveScene.cameras[0];saveScene.beats[1].cameras[cam.id].lens=85;
+const saved=M.saveInstancePreset(saveProject,saveScene,'camera',cam.id,saveScene.beats[0].id);assert.equal(cam.presetBeatOverrides[saveScene.beats[1].id].lens,true);
+M.updatePreset(saveProject,'camera',saved.id,{lens:40});assert.equal(saveScene.beats[0].cameras[cam.id].lens,40);assert.equal(saveScene.beats[1].cameras[cam.id].lens,85);
+const actor=M.saveInstancePreset(saveProject,saveScene,'actor',saveScene.actors[0].id,saveScene.beats[0].id);assert.equal(actor.name,saveScene.actors[0].name);
+assert.equal(M.recolor(saveProject,saveScene.actors[0].id,'abc'),null);assert.equal(M.recolor(saveProject,saveScene.actors[1].id,'#AABBCC'),null);assert.equal(saveScene.actors[0].color,saveScene.actors[1].color);
+const legacy=M.createProject();delete legacy.cameraDefaults;delete legacy.presets;for(const beat of legacy.scenes[0].beats)for(const state of Object.values(beat.cameras)){delete state.sensorHeight;delete state.sensorFormat}
+const migrated=M.migrate(legacy);assert.equal(migrated.cameraDefaults.sensorWidth,36);assert.deepEqual(migrated.presets,{actors:[],cameras:[]});assert.equal(migrated.scenes[0].beats[0].cameras[migrated.scenes[0].cameras[0].id].sensorHeight,24);
+// Exercise the real property handlers, not only the model helpers.
+const h=harness();h.ui.selection={type:'camera',id:h.scene.cameras[0].id};const record=M.saveInstancePreset(h.project,h.scene,'camera',h.ui.selection.id,h.beat.id);
+h.edit('lens','82');h.edit('sensor','27');assert.equal(h.scene.cameras[0].presetBeatOverrides[h.beat.id].lens,true);assert.equal(h.beat.cameras[h.ui.selection.id].sensorFormat,'custom');
+h.edit('itemHex','abc');assert.equal(h.scene.cameras[0].color,'#AABBCC');M.updatePreset(h.project,'camera',record.id,{color:'#000000',lens:42});assert.equal(h.scene.cameras[0].color,'#AABBCC');assert.equal(h.beat.cameras[h.ui.selection.id].lens,82);
+assert.match(h.inspector(),/Project preset/);assert.match(h.inspector(),/Sensor Height/);h.openEditDialog('edit-project',h.project.id);assert.match(h.modal(),/Actor Library/);assert.match(h.modal(),/Export Project/);
+console.log('Feedback presets: defaults, independent scene instances, explicit global updates, overrides, duplication, legacy migration and roundtrip passed');

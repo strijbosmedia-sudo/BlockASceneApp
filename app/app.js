@@ -15,9 +15,9 @@ const playbackOptions=()=>P.settings(project()?.playback);
 function stopPlayback(resetFrame=true){if(playback.raf)cancelAnimationFrame(playback.raf);playback.raf=0;playback.playing=false;if(resetFrame)playback.frame=null;updatePlaybackChrome()}
 function elapsedPlayback(){return playback.elapsedMs+(playback.playing?Math.max(0,performance.now()-playback.startedAt):0)}
 function updatePlaybackChrome(){const el=document.querySelector('[data-action=toggle-playback]');if(el){el.textContent=playback.playing?'Ⅱ Pause':'▶ Play';el.setAttribute('aria-label',playback.playing?'Pause playback':'Play scene beats')}const state=playback.frame;const active=state?state.index:scene()?.beats.findIndex(x=>x.id===ui.beatId);document.querySelectorAll('.beat-chip').forEach((chip,i)=>{chip.classList.toggle('active',i===active);chip.classList.toggle('playing',!!playback.frame&&i===active)});const badge=document.getElementById('playbackStatus');if(badge)badge.textContent=playback.playing?'PLAYING':playback.frame?'PAUSED':'PREVIEW'}
-function tickPlayback(){if(!playback.playing)return;const beats=scene()?.beats;if(!beats?.length)return stopPlayback();playback.frame=P.frameAt(beats,elapsedPlayback(),playbackOptions(),playback.startIndex);ui.beatId=beats[playback.frame.index].id;paint();updatePlaybackChrome();if(playback.frame.done){stopPlayback(false);paint();return}playback.raf=requestAnimationFrame(tickPlayback)}
+function tickPlayback(){if(!playback.playing)return;const beats=scene()?.beats;if(!beats?.length)return stopPlayback();playback.frame=P.loopFrameAt(beats,elapsedPlayback(),playbackOptions(),playback.startIndex);ui.beatId=beats[playback.frame.index].id;paint();updatePlaybackChrome();if(playback.frame.done){stopPlayback(false);paint();return}playback.raf=requestAnimationFrame(tickPlayback)}
 function togglePlayback(){if(playback.playing){playback.elapsedMs=elapsedPlayback();stopPlayback(false);paint();return}if(!scene()?.beats.length)return;if(playback.frame?.done){playback.frame=null;playback.elapsedMs=0}if(!playback.frame){playback.startIndex=Math.max(0,scene().beats.findIndex(x=>x.id===ui.beatId));playback.elapsedMs=0}playback.startedAt=performance.now();playback.playing=true;playback.raf=requestAnimationFrame(tickPlayback);updatePlaybackChrome()}
-function setPlaybackOption(name,value){const proj=project();if(!proj)return;const old=playbackOptions(),now={...old,[name]:name==='speed'||name==='holdMs'?Number(value):value};const elapsed=elapsedPlayback();proj.playback=P.settings(now);if(playback.playing||playback.frame){playback.elapsedMs=name==='speed'?elapsed*old.speed/proj.playback.speed:elapsed;playback.startedAt=performance.now();playback.frame=P.frameAt(scene().beats,playback.elapsedMs,proj.playback,playback.startIndex);paint()}save();updatePlaybackChrome()}
+function setPlaybackOption(name,value){const proj=project();if(!proj)return;const old=playbackOptions(),now={...old,[name]:name==='speed'||name==='holdMs'?Number(value):value};const elapsed=elapsedPlayback();proj.playback=P.settings(now);if(playback.playing||playback.frame){playback.elapsedMs=name==='speed'?elapsed*old.speed/proj.playback.speed:elapsed;playback.startedAt=performance.now();playback.frame=P.loopFrameAt(scene().beats,playback.elapsedMs,proj.playback,playback.startIndex);paint()}save();updatePlaybackChrome()}
 const project=()=>database.projects.find(p=>p.id===ui.projectId),scene=()=>project()?.scenes.find(s=>s.id===ui.sceneId),set=()=>project()?.sets.find(o=>o.id===scene()?.setId),beat=()=>scene()?.beats.find(b=>b.id===ui.beatId);
 const actorBy=id=>scene()?.actors.find(o=>o.id===id),cameraBy=id=>scene()?.cameras.find(o=>o.id===id),equipmentBy=id=>scene()?.equipment.find(o=>o.id===id);
 const stateOf=(selection=ui.selection,b=beat())=>!selection||!b?null:selection.type==='actor'?b.positions[selection.id]:selection.type==='camera'?b.cameras[selection.id]:selection.type==='equipment'?(equipmentBy(selection.id)?.lockToSet?equipmentBy(selection.id).fixedState:b.equipment[selection.id]):selection.type==='setobj'?set()?.objects.find(o=>o.id===selection.id):null;
@@ -28,6 +28,16 @@ async function loadDB(){try{const db=await openStore();const result=await new Pr
 async function writeDB(){try{const db=await openStore();await new Promise((resolve,reject)=>{const tr=db.transaction('state','readwrite');tr.objectStore('state').put(database,'database');tr.oncomplete=resolve;tr.onerror=()=>reject(tr.error)});db.close()}catch(e){try{localStorage.setItem('blockascene-backup',JSON.stringify(database))}catch{notice('Storage is full. Export your project backup now.')}}}
 function defaultLayout(){return {layersPinned:false,propertiesPinned:false,layersSide:'right',propertiesSide:'right',layersWidth:290,propertiesWidth:300,layersFloatX:null,layersFloatY:null,propertiesFloatX:null,propertiesFloatY:null,layersFloatHeight:490,propertiesFloatHeight:510,timelineCollapsed:false}}
 function saveLayout(){try{localStorage.setItem('Block4Film-v11-layout',JSON.stringify(ui.layout))}catch{}}
+function compactPanelMode(){return window.innerWidth<=1000}
+function activePanel(){if(ui.activePanel==='layers'&&ui.showLayers)return 'layers';return ui.showInspector?'properties':ui.showLayers?'layers':''}
+function panelTabs(){if(!compactPanelMode()||!activePanel())return '';return `<nav class="compact-panel-tabs" aria-label="Editor panel tabs">${ui.showInspector?`<button data-action="activate-panel" data-panel="properties" class="${activePanel()==='properties'?'active':''}">Properties</button>`:''}${ui.showLayers?`<button data-action="activate-panel" data-panel="layers" class="${activePanel()==='layers'?'active':''}">Layers</button>`:''}</nav>`}
+function togglePanel(name){
+ const key=name==='layers'?'showLayers':'showInspector';
+ if(compactPanelMode()&&ui[key]&&activePanel()!==name)ui.activePanel=name;
+ else{ui[key]=!ui[key];if(ui[key])ui.activePanel=name}
+ if(name==='properties'&&!ui.selection)ui.selection={type:'background'};
+ ui.showExportPanel=false;render();
+}
 function panelMeta(name){
  const p=name==='layers'?'layers':'properties',side=ui.layout[p+'Side']==='left'?'left':'right',pinned=!!ui.layout[p+'Pinned'];
  const width=clamp(Number(ui.layout[p+'Width'])||290,220,470);
@@ -187,7 +197,7 @@ function manageItem(kind,id,cmd){
  if(cmd==='edit'||cmd==='rename'){ui.previewDraft=undefined;ui.dialog={kind:'edit-'+kind,id};ui.showMenu=false;render();return}
  if(cmd==='open'){if(kind==='project')openProject(id);else if(kind==='scene')openScene(id);return}
  
- if(cmd==='duplicate'){checkpoint();const copy=M.clone(item);copy.id=M.uid();copy.name=item.name+' copy';if(kind==='project'){copy.updatedAt=Date.now();database.projects.push(copy)}else if(kind==='scene'){copy.beats.forEach(b=>b.id=M.uid());p.scenes.push(copy)}else{copy.objects.forEach(o=>o.id=M.uid());p.sets.push(copy)}save();render();return}
+ if(cmd==='duplicate'){checkpoint();const copy=M.clone(item);copy.id=M.uid();copy.name=item.name+' copy';if(kind==='project'){copy.updatedAt=Date.now();database.projects.push(copy)}else if(kind==='scene'){const ids={};copy.beats.forEach(b=>{const old=b.id;b.id=M.uid();ids[old]=b.id});M.remapPresetBeats(copy,ids);for(const [key,type] of [['actors','actor'],['cameras','camera']])for(const entry of copy[key])if(entry.presetId)M.detachSharedIdentity(p,copy,type,entry);p.scenes.push(copy)}else{copy.objects.forEach(o=>o.id=M.uid());p.sets.push(copy)}save();render();return}
  if(cmd==='delete'){if(kind==='set'&&p.sets.length<2)return notice('Keep at least one floor plan');if(kind==='scene'&&p.scenes.length<2)return notice('Keep at least one scene');ui.dialog={kind:'confirm-delete',targetKind:kind,id,name:item.name};render();return}
 }
 function applyConfirmedDelete(){
@@ -237,48 +247,116 @@ function check(name,label,checked){return `<label class="switch"><span>${esc(lab
 function colors(current){return `<div class="swatches">${M.PRESET.map(color=>`<button type="button" class="swatch ${color.toUpperCase()===String(current).toUpperCase()?'selected':''}" style="background:${color}" data-action="quick-color" data-color="${color}" title="${color}"></button>`).join('')}</div>`}
 function beatVisibilityGrid(sel){
  const sc=scene(),field=sel.type==='actor'?'positions':'cameras';
- return `<section class="beat-visibility"><div class="beat-visibility-title">Visible in beats <small>${sc.beats.filter(b=>b[field][sel.id]?.visible!==false&&b[field][sel.id]).length} / ${sc.beats.length}</small></div><div class="beat-visibility-list">${sc.beats.map((b,i)=>`<label class="beat-visibility-row ${b.id===ui.beatId?'current':''}"><input type="checkbox" name="beatVisible:${esc(b.id)}" ${b[field][sel.id]&&b[field][sel.id].visible!==false?'checked':''}/><span class="beat-visibility-number">${String(i+1).padStart(2,'0')}</span><span class="beat-visibility-name">${esc(b.name)}</span>${b.id===ui.beatId?'<em>NOW</em>':''}</label>`).join('')}</div><p class="help">Choose exactly which beats show this ${sel.type}. New beats appear here automatically.</p></section>`;
+ return `<section class="beat-visibility"><div class="beat-visibility-title">Visible in beats <small>${sc.beats.filter(b=>b[field][sel.id]?.visible!==false&&b[field][sel.id]).length} / ${sc.beats.length}</small></div><div class="beat-visibility-list" data-scroll-key="beat-visibility">${sc.beats.map((b,i)=>`<label class="beat-visibility-row ${b.id===ui.beatId?'current':''}"><input type="checkbox" name="beatVisible:${esc(b.id)}" ${b[field][sel.id]&&b[field][sel.id].visible!==false?'checked':''}/><span class="beat-visibility-number">${String(i+1).padStart(2,'0')}</span><span class="beat-visibility-name">${esc(b.name)}</span>${b.id===ui.beatId?'<em>NOW</em>':''}</label>`).join('')}</div><p class="help">Choose exactly which beats show this ${sel.type}. New beats appear here automatically.</p></section>`;
 }
+function propertyGroup(key,title,body,defaultOpen=false){
+ if(!body)return '';
+ const open=ui.layout.propertyGroups?.[key]??defaultOpen;
+ return `<details class="property-group" data-property-group="${key}" ${open?'open':''}><summary>${title}</summary><div class="property-group-body">${body}</div></details>`;
+}
+function presetControls(sel,identity){
+ if(!['actor','camera'].includes(sel.type))return '';
+ const key=sel.type==='actor'?'actors':'cameras',library=project().presets?.[key]||[];
+ const selected=library.find(p=>p.id===identity.presetId);
+ const fields=Object.keys(identity.presetOverrides||{}),beatFields=Object.values(identity.presetBeatOverrides||{}).some(v=>Object.values(v).some(Boolean));
+ return `${option('Project preset','projectPreset',[['','Independent instance'],...library.map(p=>[p.id,(sel.type==='actor'?M.label(p.number):p.number)+' · '+p.name])],identity.presetId||'')}
+  <p class="help">${selected?`Linked to ${esc(selected.name)}. Editing fields here overrides this scene instance; project preset edits update inherited fields only.${fields.length||beatFields?' This instance has overrides.':''}`:'Choose a project preset to reuse its identity and default configuration. Poses and movement remain independent.'}</p>
+  ${btn('save-instance-preset','save','Save as Project Preset','wide')}${selected?btn('reset-instance-preset','reset','Use project preset values','wide'):''}`;
+}
+function sensorFields(prefix,config){
+ const d=M.cameraDefaults(config);
+ return `<label class="field"><span>Sensor format</span><select id="${prefix}Format" data-sensor-format="${prefix}">${M.SENSOR_FORMATS.map(([id,name])=>`<option value="${id}" ${id===d.sensorFormat?'selected':''}>${name}</option>`).join('')}</select></label>
+  <div class="two-fields"><label class="field"><span>Sensor Width (mm)</span><input id="${prefix}Width" data-sensor-dimension="${prefix}" type="number" min="3" max="70" step="0.01" value="${d.sensorWidth}"/></label>
+  <label class="field"><span>Sensor Height (mm)</span><input id="${prefix}Height" data-sensor-dimension="${prefix}" type="number" min="3" max="70" step="0.01" value="${d.sensorHeight}"/></label></div>
+  <label class="field"><span>Default focal length (mm)</span><input id="${prefix}Lens" type="number" min="8" max="600" step="1" value="${d.lens}"/></label>`;
+}
+function readSensorFields(prefix,fallback={}){
+ const d=M.cameraDefaults(fallback),value=(suffix,otherwise)=>app.querySelector('#'+prefix+suffix)?.value??otherwise;
+ return {sensorFormat:value('Format',d.sensorFormat),sensorWidth:Number(value('Width',d.sensorWidth)),sensorHeight:Number(value('Height',d.sensorHeight)),lens:Number(value('Lens',d.lens))};
+}
+function sensorFieldsError(value){return [['sensorWidth',3,70],['sensorHeight',3,70],['lens',8,600]].some(([key,min,max])=>!Number.isFinite(value[key])||value[key]<min||value[key]>max)?'Check sensor dimensions (3–70 mm) and focal length (8–600 mm).':null}
+function projectSettingsFields(item,create=false){
+ const settings=item?.cameraDefaults||M.cameraDefaults();
+ const defaults=`<details class="settings-group" id="projectCameraSettings" open><summary>Project Camera Defaults</summary><div class="settings-group-body">${sensorFields('projectCamera',settings)}<p class="help">Defaults apply to new cameras across all scenes. Existing cameras keep their settings. Format dimensions are editable reference sizes; check the recording area of your camera.</p></div></details>`;
+ if(create)return defaults;
+ const library=(type)=>{
+  const key=type==='actor'?'actors':'cameras',presets=item.presets?.[key]||[];
+  return `<details class="settings-group" id="${type}Library"><summary>${type==='actor'?'Actor':'Camera'} Library (${presets.length})</summary><div class="settings-group-body"><p class="help">Update preset saves changes across linked instances, except fields overridden in an instance. Positions, rotations and movement never change.</p>
+   ${presets.map(p=>{
+    const prefix='preset'+p.id,used=presets.filter(q=>q.id!==p.id).map(q=>Number(q.number));
+    return `<details class="library-preset" id="presetRow${esc(p.id)}"><summary>${type==='actor'?M.label(p.number):p.number} · ${esc(p.name)}</summary><div class="settings-group-body">
+     <label class="field"><span>Name</span><input id="${prefix}Name" value="${esc(p.name)}" maxlength="100"/></label>
+     <div class="two-fields"><label class="field"><span>${type==='actor'?'Actor letter':'Camera number'}</span><select id="${prefix}Number">${Array.from({length:Math.max(40,Number(p.number)+12)},(_,i)=>i+1).map(n=>`<option value="${n}" ${n===Number(p.number)?'selected':''} ${used.includes(n)?'disabled':''}>${type==='actor'?M.label(n):n}</option>`).join('')}</select></label>
+     <label class="field"><span>Color (HEX)</span><input id="${prefix}Color" value="${esc(p.color)}" maxlength="7"/></label></div>
+     ${type==='camera'?sensorFields(prefix,p):''}
+     <button class="action" data-action="update-library-preset" data-type="${type}" data-id="${esc(p.id)}" data-project="${esc(item.id)}">Update preset</button>
+     <button class="action danger" data-action="request-preset-delete" data-type="${type}" data-id="${esc(p.id)}">Remove</button>
+     ${ui.pendingPresetDelete?.id===p.id?`<div class="preset-delete-confirm" role="alertdialog" aria-label="Remove project preset"><p>Remove this library preset? Placed instances keep their current settings and movement, and become independent.</p><button class="action danger" data-action="confirm-preset-delete" data-type="${type}" data-id="${esc(p.id)}" data-project="${esc(item.id)}">Remove preset</button><button class="action" data-action="cancel-preset-delete">Cancel</button></div>`:''}
+    </div></details>`;
+   }).join('')}
+   <button class="action wide" data-action="new-library-preset" data-type="${type}" data-project="${esc(item.id)}">Add ${type} preset</button>
+  </div></details>`;
+ };
+ return defaults+library('actor')+library('camera');
+}
+
+function movementFields(sel,state){
+ let html=beatVisibilityGrid(sel);
+ if(!state)return html+'<p class="help">This object has no saved position in this beat. Enable its visibility to restore its nearest saved pose.</p>';
+ const types=sel.type==='actor'?[['static','No movement'],['walk','Move actor'],['turn','Turn in place']]:[['static','Static'],['pan','Pan in place'],['push','Push in / Pull back'],['slide','Slide left / right'],['track','Dolly / Track']];
+ html+=option('Movement within beat','motionKind',types,state.motion?.kind||'static');
+ if(state.motion){
+  if(M.positionalMotion(state.motion))html+=`<div class="two-fields">${prop('End X','endX',Math.round(state.motion.endX),'number')}${prop('End Y','endY',Math.round(state.motion.endY),'number')}</div>`;
+  html+=prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number','step="1"');
+ }
+ html+=`<div class="rotation-direction">${check('turnLeft','Turn Left',state.rotationDirection==='left')}${check('turnRight','Turn Right',state.rotationDirection==='right')}<p class="help">Neither selected: shortest turn. Left: counterclockwise. Right: clockwise.</p></div>`;
+ if(M.positionalMotion(state.motion)){
+  const motion=state.motion,keys=[...(motion.keys||[])].sort((a,b)=>a.t-b.t);
+  html+=`${option('Motion path','motionPath',[['linear','Straight segments'],['smooth','Smooth curves']],motion.pathType||'linear')}
+   <div class="keyframe-head"><strong>Movement keyframes</strong>${btn('add-motion-keyframe','+','Add keyframe','small')}</div>
+   <p class="help">Drag keyframe diamonds to bend the path. Adjust timing and direction for turns and pans.</p>
+   <div class="motion-keyframe-list">${keys.map((k,i)=>`<div class="keyframe-row"><div class="keyframe-head"><b>Keyframe ${i+1}</b><button data-action="remove-motion-keyframe" data-id="${esc(k.id)}" aria-label="Remove keyframe ${i+1}">×</button></div>
+    <div class="two-fields">${prop('Time (%)','keyframe:'+k.id+':t',Math.round(k.t*100),'number','min="1" max="99" step="1"')}${prop('Direction (°)','keyframe:'+k.id+':rotation',Math.round(M.normalizeAngle(k.rotation)),'number','step="1"')}</div>
+    <div class="two-fields">${prop('X','keyframe:'+k.id+':x',Math.round(k.x),'number')}${prop('Y','keyframe:'+k.id+':y',Math.round(k.y),'number')}</div></div>`).join('')}</div>`;
+ }
+ return html;
+}
+function lightFields(d){return `${option('Light modifier','lightModifier',[['standard','Standard'],['softbox','Softbox'],['spot','Spotlight']],d.lightModifier||'standard')}${d.lightModifier==='softbox'?option('Softbox size','softboxSize',[['small','Small · 60 cm'],['medium','Medium · 90 cm'],['large','Large · 120 cm'],['extra-large','Extra large · 150 cm']],d.softboxSize||'medium'):''}${option('Light color mode','lightMode',[['kelvin','Daylight / Kelvin'],['color','Color']],d.lightMode||'kelvin')}${d.lightMode==='color'?prop('Choose light color','lightColor',d.lightColor||'#FFFFFF','color'):`<div class="two-fields">${prop('Kelvin (K)','lightKelvin',d.lightKelvin||5600,'number','min="2000" max="12000" step="100"')}${prop('Warm ↔ Cool','lightKelvin',d.lightKelvin||5600,'range','min="2000" max="12000" step="100"')}</div>`}<p class="help">Modifiers change the floor-plan symbol.</p>`}
+function cameraFields(state){return `${option('Sensor format','cameraSensorFormat',M.SENSOR_FORMATS.map(f=>[f[0],f[1]]),state.sensorFormat||'custom')}<div class="two-fields">${prop('Lens (mm)','lens',state.lens,'number','min="8" max="600"')}${prop('Sensor Width (mm)','sensor',state.sensor,'number','min="5" max="70" step="0.1"')}${prop('Sensor Height (mm)','sensorHeight',state.sensorHeight??24,'number','min="3" max="70" step="0.1"')}</div>${prop('Cone reach','coneRange',Math.round(state.coneRange??365),'range','min="80" max="1100" step="10"')}<p class="help">Lens and sensor width determine the horizontal view angle.</p>`}
+function transformFields(state){return `<div class="two-fields">${prop('X','x',Math.round(state.x),'number')}${prop('Y','y',Math.round(state.y),'number')}</div>${prop('Direction (degrees)','rotation',Math.round(M.normalizeAngle(state.rotation)),'number','step="1"')}`}
 function inspector(){
  if(!ui.showInspector)return '';
- if(!ui.selection){
-  const m=panelMeta('properties');
-  return `<aside class="inspector ${m.pinned?'docked':'panel-float'}" data-panel="properties" data-side="${m.side}" data-moved="${m.moved}" style="${panelStyle('properties')}"><div class="inspector-head panel-header" data-drag-panel="properties"><span>OBJECT PROPERTIES</span>${panelButtons('properties')}</div><div class="inspect-body"><p class="help">Select an object to edit its properties.</p></div>${panelGrip('properties')}</aside>`;
- }
  const sel=ui.selection,d=detailsOf(sel),state=stateOf(sel);let content='';
- if(d&&(sel.type==='actor'||sel.type==='camera'||sel.type==='equipment')){
-  content=`<div class="inspector-title"><span class="object-mark" style="background:${d.color||'#C8CBD1'}"></span><div><small>${sel.type==='actor'?'ACTOR '+M.label(d.number):sel.type==='camera'?'CAMERA '+d.number:d.type.toUpperCase()}</small><h3>${esc(d.name)}</h3></div></div>${prop('Name','itemName',d.name)}<div class="field"><span>Object color</span>${colors(d.color)}${prop('Custom HEX','itemColor',d.color,'color')}</div>${sel.type==='actor'||sel.type==='camera'?option('Symbol outline','itemOutline',[['white','White'],['black','Black']],d.outline||'white'):''}`;
-  if(['actor','camera'].includes(sel.type))content+=identityNumberField(sel,d);
-  if(state)content+=`<div class="two-fields">${prop('X','x',Math.round(state.x),'number')}${prop('Y','y',Math.round(state.y),'number')}</div>${prop('Direction (degrees)','rotation',Math.round(M.normalizeAngle(state.rotation)),'number','step="1"')}${sel.type==='equipment'?check('visible','Visible in this beat',state.visible!==false):''}`;
-  if(sel.type==='actor'||sel.type==='camera')content+=beatVisibilityGrid(sel);
-  if(sel.type==='actor'&&state){content+=`${option('Movement within beat','motionKind',[['static','No movement'],['walk','Move actor'],['turn','Turn in place']],state.motion?.kind||'static')}${state.motion?`<p class="help">Drag the destination and rotate its direction handle to turn while moving.</p>${state.motion.kind==='turn'?'':`<div class="two-fields">${prop('End X','endX',Math.round(state.motion.endX),'number')}${prop('End Y','endY',Math.round(state.motion.endY),'number')}</div>`}${prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number')}`:''}`;}
-   if(sel.type==='camera'&&state){content+=`<div class="divider"></div><div class="two-fields">${prop('Lens (mm)','lens',state.lens,'number','min="8" max="600"')}${prop('Sensor (mm)','sensor',state.sensor,'number','min="5" max="70"')}</div>${prop('Cone reach','coneRange',Math.round(state.coneRange??365),'range','min="80" max="1100" step="10"')}<p class="help">Drag the camera cone end handle to change its reach. Lens and sensor control the view angle.</p>${option('Movement within beat','motionKind',[['static','Static'],['pan','Pan in place'],['push','Push in / Pull back'],['slide','Slide left / right'],['track','Dolly / Track']],state.motion?.kind||'static')}`;
-   if(state.motion)content+=`<p class="help">Drag the destination and direction handle to rotate while moving.</p>${state.motion.kind==='pan'?'':`<div class="two-fields">${prop('Pos 2 X','endX',Math.round(state.motion.endX),'number')}${prop('Pos 2 Y','endY',Math.round(state.motion.endY),'number')}</div>`}${prop('End direction','endRotation',Math.round(M.normalizeAngle(state.motion.endRotation)),'number')}`;
-  }
-  if(state?.motion&&['actor','camera'].includes(sel.type)){
-   const motion=state.motion,keys=[...(motion.keys||[])].sort((a,b)=>a.t-b.t);
-   content+=`<div class="divider"></div>${option('Motion path','motionPath',[['linear','Straight segments'],['smooth','Smooth curves']],motion.pathType||'linear')}
-    <div class="keyframe-head"><strong>Movement keyframes</strong>${btn('add-motion-keyframe','+','Add keyframe','small')}</div>
-    <p class="help">Drag keyframe diamonds to bend the path. Adjust timing and direction for turns and pans.</p>
-    <div class="motion-keyframe-list">${keys.map((k,i)=>`<div class="keyframe-row"><div class="keyframe-head"><b>Keyframe ${i+1}</b><button data-action="remove-motion-keyframe" data-id="${esc(k.id)}" aria-label="Remove keyframe ${i+1}">×</button></div>
-      <div class="two-fields">${prop('Time (%)','keyframe:'+k.id+':t',Math.round(k.t*100),'number','min="1" max="99" step="1"')}${prop('Direction (°)','keyframe:'+k.id+':rotation',Math.round(M.normalizeAngle(k.rotation)),'number','step="1"')}</div>
-      <div class="two-fields">${prop('X','keyframe:'+k.id+':x',Math.round(k.x),'number')}${prop('Y','keyframe:'+k.id+':y',Math.round(k.y),'number')}</div></div>`).join('')}</div>`;
-  }
-  if(!state&&(sel.type==='actor'||sel.type==='camera'))content+=`<p class="help">This object has no saved position in this beat. Tick its beat checkbox to place it using its nearest saved state.</p>`;
-  if(sel.type==='equipment'&&d.type==='light'){content+=`<div class="divider"></div>${option('Light modifier','lightModifier',[['standard','Standard'],['softbox','Softbox'],['spot','Spotlight']],d.lightModifier||'standard')}${d.lightModifier==='softbox'?option('Softbox size','softboxSize',[['small','Small · 60 cm'],['medium','Medium · 90 cm'],['large','Large · 120 cm'],['extra-large','Extra large · 150 cm']],d.softboxSize||'medium'):''}${option('Light color mode','lightMode',[['kelvin','Daylight / Kelvin'],['color','Color']],d.lightMode||'kelvin')}${d.lightMode==='color'?prop('Choose light color','lightColor',d.lightColor||'#FFFFFF','color'):`<div class="two-fields">${prop('Kelvin (K)','lightKelvin',d.lightKelvin||5600,'number','min="2000" max="12000" step="100"')}${prop('Warm ↔ Cool','lightKelvin',d.lightKelvin||5600,'range','min="2000" max="12000" step="100"')}</div>`}<p class="help">${d.lightMode==='color'?'Choose a specific light color.':'2,000 K is warm; 5,600 K is daylight; 12,000 K is cool.'} Modifiers change the floor-plan symbol.</p>`}
-   if(sel.type==='equipment'){content+=`${check('lockToSet','Lock position across beats',!!d.lockToSet)}<p class="help">Simple diagram symbol. Rename it to the real item on set.</p>`}
-  content+=`${btn('delete-selection','⌫','Delete object','danger wide')}`;
- }else if(sel.type==='setobj'&&state){const line=['wall','window','door'].includes(state.type);content=`<h3>${line?state.type[0].toUpperCase()+state.type.slice(1):'Furniture'} properties</h3>${prop('Name','itemName',state.name||'')}${prop('X','x',Math.round(state.x),'number')}${prop('Y','y',Math.round(state.y),'number')}${prop('Rotation','rotation',Math.round(state.rotation||0),'number')}${line?prop('Length','setLength',Math.round(state.w||80),'number','min="20" max="2000" step="1"'):`<div class="two-fields">${prop('Width','setWidth',Math.round(state.w||110),'number','min="20" max="2000"')}${prop('Height','setHeight',Math.round(state.h||80),'number','min="20" max="2000"')}</div>`}<p class="help">Drag the ${line?'far endpoint to resize the length':'corner handle to resize the furniture'}.</p>${btn('delete-selection','⌫','Delete object','danger wide')}`}
- else if(sel.type==='background'){content=`<h3>Floor plan</h3>${prop('Set name','setName',set().name)}${prop('Image scale (%)','backgroundScale',Math.round((set().backgroundScale??1)*100),'range','min="25" max="300" step="5"')}${prop('Opacity (%)','opacity',Math.round((set().opacity??.8)*100),'range','min="5" max="100"')}${check('darken','Darken imported image',set().darken!==false)}${btn('import-bg','▧','Replace floor plan','wide')}${btn('clear-bg','×','Remove image','danger wide')}`}
- const m=panelMeta('properties');return `<aside class="inspector ${m.pinned?'docked':'panel-float'}" data-panel="properties" data-side="${m.side}" data-moved="${m.moved}" style="${panelStyle('properties')}"><div class="inspector-head panel-header" data-drag-panel="properties"><span>OBJECT PROPERTIES</span>${panelButtons('properties')}</div><div class="inspect-body">${content}</div>${panelGrip('properties')}</aside>`}
+ if(d&&['actor','camera','equipment'].includes(sel.type)){
+  const moving=['actor','camera'].includes(sel.type);
+  content=`<div class="inspector-title"><span class="object-mark" style="background:${d.color||'#C8CBD1'}"></span><div><small>${sel.type==='actor'?'ACTOR '+M.label(d.number):sel.type==='camera'?'CAMERA '+d.number:d.type.toUpperCase()}</small><h3>${esc(d.name)}</h3></div></div>`;
+  content+=propertyGroup('beats','Beats & Movement',moving?movementFields(sel,state):`${state?check('visible','Visible in this beat',state.visible!==false):''}${check('lockToSet','Lock position across beats',!!d.lockToSet)}`,true);
+  content+=propertyGroup('identity','Identity & Color',`${presetControls(sel,d)}${prop('Name','itemName',d.name)}${moving?identityNumberField(sel,d):''}<div class="field"><span>Object color</span>${colors(d.color)}${prop('Color picker','itemColor',d.color,'color')}${prop('Custom HEX','itemHex',d.color,'text','maxlength="7" placeholder="#RRGGBB"')}</div>`);
+  content+=propertyGroup('object','Object-Specific Properties',sel.type==='camera'&&state?cameraFields(state):sel.type==='equipment'&&d.type==='light'?lightFields(d):'',true);
+  content+=propertyGroup('appearance','Appearance & Display',moving?option('Symbol outline','itemOutline',[['white','White'],['black','Black']],d.outline||'white'):'');
+  content+=propertyGroup('transform','Position & Transform',state?transformFields(state):'');
+  content+=btn('delete-selection','⌫','Delete object','danger wide');
+ }else if(sel?.type==='setobj'&&state){
+  const line=isStructural(state),column=state.type==='column',title=column?'Column':line?state.type[0].toUpperCase()+state.type.slice(1):'Furniture';
+  content=`<h3>${title} properties</h3>`+propertyGroup('identity','Identity & Color',prop('Name','itemName',state.name||''));
+  content+=propertyGroup('object','Object-Specific Properties',`${column?option('Column shape','columnShape',[['round','Round'],['square','Square']],state.shape||'round'):''}${column?prop(state.shape==='round'?'Diameter':'Size','columnSize',Math.round(state.w||80),'number','min="20" max="2000"'):line?prop('Length','setLength',Math.round(state.w||80),'number','min="20" max="2000" step="1"'):`<div class="two-fields">${prop('Width','setWidth',Math.round(state.w||110),'number','min="20" max="2000"')}${prop('Height','setHeight',Math.round(state.h||80),'number','min="20" max="2000"')}</div>`}<p class="help">Drag the ${line?'far endpoint to resize the length':'corner handle to resize the object'}.</p>`,true);
+  content+=propertyGroup('transform','Position & Transform',transformFields(state))+btn('delete-selection','⌫','Delete object','danger wide');
+ }else if(sel?.type==='background'){
+  content='<h3>Floor plan</h3>'+propertyGroup('identity','Identity & Color',prop('Set name','setName',set().name));
+  content+=propertyGroup('object','Floor Plan Settings',`${prop('Image scale (%)','backgroundScale',Math.round((set().backgroundScale??1)*100),'range','min="25" max="300" step="5"')}${prop('Opacity (%)','opacity',Math.round((set().opacity??.8)*100),'range','min="5" max="100"')}${check('darken','Darken imported image',set().darken!==false)}${btn('import-bg','▧','Replace floor plan','wide')}${btn('clear-bg','×','Remove image','danger wide')}`,true);
+ }else content='<p class="help">Select an object to edit its properties.</p>';
+ const m=panelMeta('properties');
+ return `<aside class="inspector ${m.pinned?'docked':'panel-float'}" data-panel="properties" data-side="${m.side}" data-moved="${m.moved}" style="${panelStyle('properties')}"><div class="inspector-head panel-header" data-drag-panel="properties"><span>OBJECT PROPERTIES</span>${panelButtons('properties')}</div><div class="inspect-body">${content}</div>${panelGrip('properties')}</aside>`;
+}
+
 function layers(){if(!ui.showLayers)return '';const objects=[...scene().actors.map(o=>({...o,kind:'actor'})),...scene().cameras.map(o=>({...o,kind:'camera'})),...scene().equipment.map(o=>({...o,kind:'equipment'}))];const m=panelMeta('layers');return `<aside class="layers-pop side-pop ${m.pinned?'docked':'panel-float'}" data-panel="layers" data-side="${m.side}" data-moved="${m.moved}" style="${panelStyle('layers')}" aria-label="Canvas layers"><div class="panel-head panel-header" data-drag-panel="layers"><strong>Layers & visibility</strong>${panelButtons('layers')}</div><div class="layers-body">${check('showCones','Camera field of view',ui.showCones)}${check('showPaths','Dotted beat-to-beat paths',ui.showPaths)}${check('showCameraMoves','Solid camera moves',ui.showCameraMoves)}${option('Other beat positions','ghostMode',[['off','Off'],['adjacent','Previous + Next'],['all','All beats']],ui.ghostMode)}<div class="object-roster"><strong>SCENE OBJECTS</strong>${objects.map(o=>{const state=stateOf({type:o.kind,id:o.id});return `<button class="roster-item" data-action="select-object" data-id="${o.id}" data-kind="${o.kind}"><span class="roster-dot" style="background:${o.color}"></span>${esc(o.kind==='actor'?M.label(o.number)+' · '+o.name:o.kind==='camera'?'Cam '+o.number+' · '+o.name:o.name)}${state?.visible===false||!state?'<em>HIDDEN</em>':''}</button>`}).join('')}</div></div>${panelGrip('layers')}</aside>`}
 const exportPrefs=()=>({imageGhosts:false,videoGhosts:false,cones:true,paths:false,...project()?.exportPrefs});
 function exportPanel(){if(!ui.showExportPanel)return '';const e=exportPrefs();return `<aside class="export-pop side-pop" aria-label="Export options"><div class="panel-head"><strong>Export settings</strong>${btn('toggle-export-panel','×','','icon-only')}</div><p class="help">These settings apply to exports only, independently of what the editor shows.</p>${check('exportImageGhosts','Ghosts in PNG / ZIP',e.imageGhosts)}${check('exportVideoGhosts','Ghosts in video',e.videoGhosts)}${check('exportCones','Camera cones in image / video',e.cones)}${check('exportPaths','Dotted paths in exports',e.paths)}<div class="export-buttons">${btn('export-image','download','Current beat PNG','wide')}${btn('export-zip','download','All beats ZIP','wide')}${btn('export-video-dialog','play','Animated WebM','wide')}${btn('backup','download','Project backup (.blockascene)','wide')}</div><p class="help">The current video format is WebM. MP4 requires an additional reliable encoding path.</p></aside>`}
 const tools=[['select',iconMark('cursor'),'Select'],['pan',iconMark('pan'),'Pan'],['actor',iconMark('user'),'Actor'],['camera',iconMark('camera'),'Camera'],['wall',iconMark('wall'),'Wall'],['door',iconMark('door'),'Door'],['furniture',iconMark('furniture'),'Furniture'],['equipment',iconMark('equipment'),'Equipment']];
-function timeline(){const sc=scene(),activeIndex=sc.beats.findIndex(b=>b.id===ui.beatId),config=playbackOptions();return `<div class="timeline ${ui.layout.timelineCollapsed?'collapsed':''}"><div class="timeline-head"><div class="timeline-heading"><button class="timeline-collapse" data-action="toggle-timeline" aria-label="${ui.layout.timelineCollapsed?'Expand beats':'Collapse beats'}">${ui.layout.timelineCollapsed?'▴':'▾'}</button><strong>Scene beats</strong><small id="playbackStatus">${playback.playing?'PLAYING':'PREVIEW'}</small></div><div class="playback-controls"><button class="play-toggle" data-action="toggle-playback" aria-label="${playback.playing?'Pause playback':'Play scene beats'}">${playback.playing?'Ⅱ Pause':'▶ Play'}</button><label class="playback-setting"><span>Speed</span><select name="playbackSpeed" aria-label="Playback speed">${[.5,.75,1,1.5,2].map(v=>`<option value="${v}" ${v===config.speed?'selected':''}>${v}×</option>`).join('')}</select></label><label class="playback-setting"><span>Hold</span><select name="playbackHold" aria-label="Hold per beat">${[2000,2500,3000,5000].map(v=>`<option value="${v}" ${v===config.holdMs?'selected':''}>${(v/1000).toFixed(1)}s</option>`).join('')}</select></label><label class="playback-setting playback-mode"><span>Transition</span><select name="playbackMode" aria-label="Transition style">${[['move','Smooth move'],['fade','Color fade'],['ghost','Ghost fade']].map(([v,label])=>`<option value="${v}" ${v===config.mode?'selected':''}>${label}</option>`).join('')}</select></label>${btn('export-video-dialog','⇩','Export video','small playback-export')}</div><div class="timeline-controls">${btn('previous-beat','‹','Previous','icon-only')}${btn('next-beat','›','Next','icon-only')}${btn('rename-beat','✎','Rename','icon-only')}${btn('delete-beat','⌫','Delete','icon-only')}${btn('add-beat','+','Add beat','small primary')}</div></div><div class="beats">${sc.beats.map((b,i)=>`<button class="beat-chip ${b.id===ui.beatId?'active':''}" data-context-kind="beat" data-action="choose-beat" data-id="${b.id}"><span>${String(i+1).padStart(2,'0')} <span class="beat-tag">${i<activeIndex?'PAST':i===activeIndex?'NOW':'NEXT'}</span></span><b>${esc(b.name)}</b><span class="beat-more" data-action="open-context" data-kind="beat" data-id="${b.id}" role="button" aria-label="Beat options">⋯</span></button>`).join('')}</div></div>`}
+function timeline(){const sc=scene(),activeIndex=sc.beats.findIndex(b=>b.id===ui.beatId),config=playbackOptions();return `<div class="timeline ${ui.layout.timelineCollapsed?'collapsed':''}"><div class="timeline-head"><div class="timeline-heading"><button class="timeline-collapse" data-action="toggle-timeline" aria-label="${ui.layout.timelineCollapsed?'Expand beats':'Collapse beats'}">${ui.layout.timelineCollapsed?'▴':'▾'}</button><strong>Scene beats</strong><small id="playbackStatus">${playback.playing?'PLAYING':'PREVIEW'}</small></div><div class="playback-controls"><button class="play-toggle" data-action="toggle-playback" aria-label="${playback.playing?'Pause playback':'Play scene beats'}">${playback.playing?'Ⅱ Pause':'▶ Play'}</button><label class="playback-setting"><span>Speed</span><select name="playbackSpeed" aria-label="Playback speed">${[.5,.75,1,1.5,2].map(v=>`<option value="${v}" ${v===config.speed?'selected':''}>${v}×</option>`).join('')}</select></label><label class="playback-setting"><span>Hold</span><select name="playbackHold" aria-label="Hold per beat">${[2000,2500,3000,5000].map(v=>`<option value="${v}" ${v===config.holdMs?'selected':''}>${(v/1000).toFixed(1)}s</option>`).join('')}</select></label><label class="playback-setting playback-mode"><span>Transition</span><select name="playbackMode" aria-label="Transition style">${[['move','Smooth move'],['fade','Color fade'],['ghost','Ghost fade']].map(([v,label])=>`<option value="${v}" ${v===config.mode?'selected':''}>${label}</option>`).join('')}</select></label><button class="action small repeat-control ${config.loop==='one'?'active':''}" data-action="set-loop" data-loop="one" aria-pressed="${config.loop==='one'}" title="Repeat the selected beat">Repeat One</button><button class="action small repeat-control ${config.loop==='all'?'active':''}" data-action="set-loop" data-loop="all" aria-pressed="${config.loop==='all'}" title="Repeat all scene beats">Repeat All</button>${btn('export-video-dialog','⇩','Export video','small playback-export')}</div><div class="timeline-controls">${btn('previous-beat','‹','Previous','icon-only')}${btn('next-beat','›','Next','icon-only')}${btn('rename-beat','✎','Rename','icon-only')}${btn('delete-beat','⌫','Delete','icon-only')}${btn('add-beat','+','Add beat','small primary')}</div></div><div class="beats">${sc.beats.map((b,i)=>`<button class="beat-chip ${b.id===ui.beatId?'active':''}" data-context-kind="beat" data-action="choose-beat" data-id="${b.id}"><span>${String(i+1).padStart(2,'0')} <span class="beat-tag">${i<activeIndex?'PAST':i===activeIndex?'NOW':'NEXT'}</span></span><b>${esc(b.name)}</b><span class="beat-more" data-action="open-context" data-kind="beat" data-id="${b.id}" role="button" aria-label="Beat options">⋯</span></button>`).join('')}</div></div>`}
 
-function editor(){return `<div class="app">${topbar()}<main class="editor"><div class="work-canvas" style="--b4-layers-width:${ui.layout.layersWidth}px;--b4-properties-width:${ui.layout.propertiesWidth}px"><nav class="toolrail">${tools.map(([id,ic,name])=>id==='wall'?`<button class="tool ${(['structure','wall','window'].includes(ui.tool))?'selected':''}" data-action="toggle-structure" aria-label="Wall or window" title="Wall or window">${ic}<span>${name}</span></button>`:id==='equipment'?`<button class="tool ${(ui.tool==='equipment'||ui.tool.startsWith('equip:'))?'selected':''}" data-action="toggle-equipment" aria-label="Equipment" title="Equipment">${ic}<span>${name}</span></button>`:`<button class="tool ${(ui.tool===id||(id==='equipment'&&ui.tool.startsWith('equip:')))?'selected':''}" data-action="tool" data-tool="${id}" title="${name}" aria-label="${name}">${ic}<span>${name}</span></button>`).join('')}</nav><div class="stage" id="canvasWrap"><canvas id="stage" aria-label="Interactive top-down scene floor plan"></canvas><div class="stage-hud"><strong>${esc(set()?.name||'Set')}</strong><small>${esc(beat()?.name||'Beat')}</small></div><div class="stage-zoom" id="zoomText">100%</div>${ui.tool==='equipment'?equipmentPicker():''}${ui.tool==='structure'?structurePicker():''}</div>${side()}${inspector()}${layers()}${exportPanel()}<nav class="utility-rail" aria-label="Editor panels"><button data-action="toggle-layers" title="Layers" aria-label="Layers" class="${ui.showLayers?'active':''}" aria-pressed="${ui.showLayers}">${iconMark('layers')}</button><button data-action="toggle-inspector" title="Properties" aria-label="Properties" class="${ui.showInspector?'active':''}" aria-pressed="${ui.showInspector}">${iconMark('sliders')}</button><button data-action="reset-layout" title="Reset layout" aria-label="Reset layout">${iconMark('reset')}</button></nav></div>${timeline()}${contextMenu()}${modal()}</main><div id="storage-note" aria-live="polite">Autosaved locally</div></div>`}
-function structurePicker(){return `<div class="equipment-menu" aria-label="Add wall or window"><div class="equipment-head">Add structural element ${btn('tool','×','','icon-only','data-tool="select"')}</div><div class="equipment-grid"><button data-action="place-structure" data-shape="wall"><span>━</span>Wall</button><button data-action="place-structure" data-shape="window"><span>▥</span>Window</button></div><p>Select a type, then tap the floor plan. Drag its endpoint to adjust length.</p></div>`}
+function editor(){return `<div class="app">${topbar()}<main class="editor"><div class="work-canvas ${compactPanelMode()&&activePanel()?'compact-panels':''}" data-active-panel="${activePanel()}" style="--b4-layers-width:${ui.layout.layersWidth}px;--b4-properties-width:${ui.layout.propertiesWidth}px"><nav class="toolrail">${tools.map(([id,ic,name])=>id==='wall'?`<button class="tool ${(['structure','wall','window','column'].includes(ui.tool))?'selected':''}" data-action="toggle-structure" aria-label="Wall or window" title="Wall or window">${ic}<span>${name}</span></button>`:id==='equipment'?`<button class="tool ${(ui.tool==='equipment'||ui.tool.startsWith('equip:'))?'selected':''}" data-action="toggle-equipment" aria-label="Equipment" title="Equipment">${ic}<span>${name}</span></button>`:`<button class="tool ${(ui.tool===id||(id==='equipment'&&ui.tool.startsWith('equip:')))?'selected':''}" data-action="tool" data-tool="${id}" title="${name}" aria-label="${name}">${ic}<span>${name}</span></button>`).join('')}</nav><div class="stage" id="canvasWrap"><canvas id="stage" aria-label="Interactive top-down scene floor plan"></canvas><div class="stage-hud"><strong>${esc(set()?.name||'Set')}</strong><small>${esc(beat()?.name||'Beat')}</small></div><div class="stage-zoom" id="zoomText">100%</div>${ui.tool==='equipment'?equipmentPicker():''}${ui.tool==='structure'?structurePicker():''}</div>${side()}${panelTabs()}${inspector()}${layers()}${exportPanel()}<nav class="utility-rail" aria-label="Editor panels"><button data-action="toggle-layers" title="Layers" aria-label="Layers" class="${ui.showLayers?'active':''}" aria-pressed="${ui.showLayers}">${iconMark('layers')}</button><button data-action="toggle-inspector" title="Properties" aria-label="Properties" class="${ui.showInspector?'active':''}" aria-pressed="${ui.showInspector}">${iconMark('sliders')}</button><button data-action="reset-layout" title="Reset layout" aria-label="Reset layout">${iconMark('reset')}</button></nav></div>${timeline()}${contextMenu()}${modal()}</main><div id="storage-note" aria-live="polite">Autosaved locally</div></div>`}
+function structurePicker(){return `<div class="equipment-menu" aria-label="Add wall or window"><div class="equipment-head">Add structural element ${btn('tool','×','','icon-only','data-tool="select"')}</div><div class="equipment-grid"><button data-action="place-structure" data-shape="wall"><span>━</span>Wall</button><button data-action="place-structure" data-shape="window"><span>▥</span>Window</button><button data-action="place-structure" data-shape="column"><span>◉</span>Column</button></div><p>Select a type, then tap the floor plan. Drag its endpoint to adjust length.</p></div>`}
  function equipmentPicker(){const opts=[['light','✹','Light'],['panel','▤','Panel'],['tube','━','Tube'],['flag','⚑','Flag'],['reflector','◑','Reflector'],['stand','⊕','Stand'],['track','═','Track'],['boom','⌁','Boom'],['custom','◇','Custom']];return `<div class="equipment-menu"><div class="equipment-head">Place basic equipment ${btn('tool','×','','icon-only','data-tool="select"')}</div><div class="equipment-grid">${opts.map(([id,ic,name])=>`<button data-action="place-equipment" data-shape="${id}" title="${name}"><span>${ic}</span>${name}</button>`).join('')}</div><p>Choose an item, then tap the floor plan. Rename it in Properties.</p></div>`}
 function manualPage(){
 const active=MANUAL.find(t=>t.id===ui.manualTab)||MANUAL[0];
@@ -291,7 +369,7 @@ function beatCommand(id,command){
  const s=scene(),i=s?.beats.findIndex(b=>b.id===id);if(i<0)return;const b=s.beats[i];
  if(command==='edit'){ui.dialog={kind:'edit-beat',id};render();return}
  
- if(command==='duplicate'){stopPlayback();checkpoint();const copy=M.clone(b);copy.id=M.uid();copy.name=b.name+' copy';s.beats.splice(i+1,0,copy);ui.beatId=copy.id;save();render();return}
+ if(command==='duplicate'){stopPlayback();checkpoint();const copy=M.clone(b);copy.id=M.uid();copy.name=b.name+' copy';M.copyPresetBeatOverrides(s,b.id,copy.id);s.beats.splice(i+1,0,copy);ui.beatId=copy.id;save();render();return}
  if(command==='delete'){if(s.beats.length===1)return notice('A scene needs at least one beat');ui.dialog={kind:'confirm-delete',targetKind:'beat',id,name:b.name};render()}
 }
 function modal(){
@@ -312,7 +390,7 @@ function modal(){
    return `<section class="preview-editor"><div class="preview-editor-heading"><strong>${group} preview image</strong><small>${mode}</small></div><div class="preview-editor-image">${image?`<img src="${esc(image)}" alt="${esc(group)} preview"/>`:`<div class="preview-empty">${iconMark('image')}<span>Beat 1 preview will appear after saving</span></div>`}</div><p class="help">Automatically generated from the saved first beat. An uploaded image stays until reset.</p><div class="preview-editor-actions"><button data-action="choose-preview-image">${iconMark('upload')} Choose image</button><button data-action="reset-preview-image">${iconMark('image')} Use automatic</button></div></section>`;
   })():'';
   const floorDetails=d.kind==='edit-set'?`<label class="field"><span>Floor plan scale: <output id="entityEditScaleValue">${Math.round((item?.backgroundScale??1)*100)}%</output></span><input type="range" id="entityEditScale" min="25" max="300" step="5" value="${Math.round((item?.backgroundScale??1)*100)}" aria-label="Floor plan scale"/></label><p class="help">100% fits the original image proportionally. Scaling will never stretch it.</p><label class="field"><span>Image opacity (%)</span><input type="number" min="5" max="100" step="5" id="entityEditOpacity" value="${Math.round((item?.opacity??.8)*100)}"/></label><label class="switch"><span>Darken imported image</span><input type="checkbox" id="entityEditDarken" ${item?.darken!==false?'checked':''}/></label><div class="set-dialog-actions"><button data-action="replace-set-background">Replace / import image</button><button data-action="clear-set-background">Remove image</button><small>${item?.background?'Image attached':'No image attached'}</small></div>`:'';
-  return `<div class="dialog-mask"><section class="dialog-card" role="dialog" aria-modal="true" aria-label="${esc(title)}"><header><h2>${esc(title)}</h2><button data-action="close-dialog" aria-label="Close">×</button></header><label class="field"><span>${esc(group)} name</span><input id="entityEditName" value="${esc(item?.name||(group==='Project'?'Untitled Film':group==='Scene'?'New scene':'New floor plan'))}" maxlength="100"/></label>${setPicker}${floorDetails}${previewDetails}<div class="dialog-actions"><button data-action="close-dialog">Cancel</button><button class="dialog-confirm" data-action="save-entity-dialog">${create?'Create':'Save changes'}</button></div></section></div>`
+  return `<div class="dialog-mask"><section class="dialog-card" role="dialog" aria-modal="true" aria-label="${esc(title)}"><header><h2>${esc(title)}</h2><button data-action="close-dialog" aria-label="Close">×</button></header><label class="field"><span>${esc(group)} name</span><input id="entityEditName" value="${esc(item?.name||(group==='Project'?'Untitled Film':group==='Scene'?'New scene':'New floor plan'))}" maxlength="100"/></label>${setPicker}${floorDetails}${previewDetails}${group==='Project'?projectSettingsFields(item,create):''}${d.kind==='edit-project'?`<section class="project-data"><h3>Project Data</h3><p class="help">Backups contain the whole project. Imports add a separate project and never replace an existing one.</p><button class="action" data-action="export-project-data" data-id="${esc(item.id)}">Export Project</button><button class="action" data-action="import-project">Import Project</button></section>`:''}<div class="dialog-actions"><button data-action="close-dialog">Cancel</button><button class="dialog-confirm" data-action="save-entity-dialog">${create?'Create':'Save changes'}</button></div></section></div>`
  }
 
  if(d.kind==='edit-beat'){const b=scene()?.beats.find(x=>x.id===d.id);if(!b)return '';
@@ -330,8 +408,11 @@ function render(){
  ensureActive();
  const key=ui.dialog?ui.dialog.kind+':'+(ui.dialog.id||''):'';
  const inspectorKey=ui.page==='editor'&&ui.showInspector?JSON.stringify([ui.projectId,ui.sceneId,ui.selection?.type||'',ui.selection?.id||'']):'';
+ const nestedScroll=new Map(inspectorKey&&inspectorKey===lastRenderedInspectorKey?[...(app.querySelectorAll?.('.inspector [data-scroll-key]')||[])].map(el=>[el.dataset.scrollKey,el.scrollTop]):[]);
  const inspectorScroll=inspectorKey&&inspectorKey===lastRenderedInspectorKey?(app.querySelector?.('.inspector .inspect-body')?.scrollTop||0):0;
  // A background rerender must never discard unsaved text or the user's caret position.
+ const dialogScroll=key&&key===lastRenderedDialogKey?(app.querySelector?.('.dialog-card')?.scrollTop||0):0;
+ const dialogGroups=new Map(key&&key===lastRenderedDialogKey?[...(app.querySelectorAll?.('.dialog-card details[id]')||[])].map(el=>[el.id,el.open]):[]);
  const preserved=new Map(),active=document.activeElement;
  let focusKey=null,caret=null;
  if(key&&lastRenderedDialogKey===key){
@@ -345,6 +426,7 @@ function render(){
  if(ui.page==='editor'&&scene())initCanvas();
  if(ui.page==='manual'){const pane=app.querySelector('.manual-content');if(pane)pane.scrollTop=ui.manualScroll[ui.manualTab]||0}
  if(key){
+  for(const el of app.querySelectorAll?.('.dialog-card details[id]')||[])if(dialogGroups.has(el.id))el.open=dialogGroups.get(el.id);
   for(const field of app.querySelectorAll?.('.dialog-card input,.dialog-card select,.dialog-card textarea')||[]){
    const saved=preserved.get(field.id||field.name);if(!saved)continue;
    if(field.type==='checkbox'||field.type==='radio')field.checked=saved.checked;else field.value=saved.value;
@@ -358,8 +440,10 @@ function render(){
    else if(!focused&&target.select)target.select();
   }
  }
+ const dialog=app.querySelector?.('.dialog-card');if(dialog&&key===lastRenderedDialogKey)dialog.scrollTop=dialogScroll;
  const inspectorBody=app.querySelector?.('.inspector .inspect-body');
  if(inspectorBody)inspectorBody.scrollTop=inspectorScroll;
+ for(const el of app.querySelectorAll?.('.inspector [data-scroll-key]')||[])if(nestedScroll.has(el.dataset.scrollKey))el.scrollTop=nestedScroll.get(el.dataset.scrollKey);
  lastRenderedInspectorKey=inspectorKey;
  lastRenderedDialogKey=key;
 }
@@ -376,7 +460,7 @@ function directionHandle(point,angle,distance=55){
  return{x:point.x+r*Math.cos(theta),y:point.y+r*Math.sin(theta),r};
 }
 function paintDirectionHandle(g,point,angle,color,marker='END'){
- const target=directionHandle(point,angle,marker==='END'?40:32);
+ const target=directionHandle(point,angle,marker==='TURN'?72:marker==='END'?40:32);
  g.save();g.strokeStyle=color;g.fillStyle=color;g.globalAlpha=.9;g.lineWidth=2/ui.view.scale;
  g.setLineDash([5/ui.view.scale,5/ui.view.scale]);g.beginPath();g.arc(point.x,point.y,target.r,0,Math.PI*2);g.stroke();g.setLineDash([]);
  g.beginPath();g.arc(target.x,target.y,8/ui.view.scale,0,2*Math.PI);g.fill();g.strokeStyle='#15161A';g.lineWidth=2/ui.view.scale;g.stroke();g.restore();
@@ -402,8 +486,20 @@ function fillText(g,text,x,y,size=14,color='#F6F6F8',bold=true){g.font=`${bold?'
 function arrow(g,a,b,color,dotted=false,opacity=1,lineWidth=3){const angle=Math.atan2(b.y-a.y,b.x-a.x),length=Math.hypot(b.x-a.x,b.y-a.y);if(length<7)return;g.save();g.globalAlpha=opacity;g.strokeStyle=color;g.fillStyle=color;g.lineWidth=lineWidth;g.lineCap='round';g.setLineDash(dotted?[2,10]:[]);g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.stroke();g.setLineDash([]);const tip={x:a.x+(b.x-a.x)*.67,y:a.y+(b.y-a.y)*.67};g.translate(tip.x,tip.y);g.rotate(angle);g.beginPath();g.moveTo(8,0);g.lineTo(-8,-5.5);g.lineTo(-8,5.5);g.closePath();g.fill();g.restore()}
 function drawActor(g,a,s,ghost=false,opacity=1){if(!s||s.visible===false)return;g.save();g.translate(s.x,s.y);const color=ghost?'#8A8E97':a.color;g.globalAlpha=(ghost?.38:1)*(s.alpha??1)*opacity;g.fillStyle=ghost?'#292B30':color;g.strokeStyle=ghost?'#B9BDC6':a.outline==='black'?'#09090B':'#E8EBEF';g.lineWidth=ghost?1.8:2.4;if(ghost)g.setLineDash([4,5]);g.beginPath();g.arc(0,0,20,0,Math.PI*2);g.fill();g.stroke();g.setLineDash([]);g.save();g.rotate(rad(s.rotation??-90));g.beginPath();g.moveTo(29,0);g.lineTo(14,-9);g.lineTo(14,9);g.closePath();g.fillStyle=color;g.fill();g.restore();fillText(g,M.label(a.number||1),0,1,18,ghost?'#C1C4CC':'#0A0B0E');if(!ghost)fillText(g,a.name,s.x-s.x,s.y-s.y-34,13,a.color,false);g.restore()}
 function drawActorMove(g,a,s){if(!s||s.visible===false||!s.motion)return;const m=s.motion;drawMotionRoute(g,s,a.color,.85);if(Math.hypot(m.endX-s.x,m.endY-s.y)<9)return;g.save();g.strokeStyle=a.color;g.lineWidth=2;g.setLineDash([5,5]);g.beginPath();g.arc(m.endX,m.endY,18,0,Math.PI*2);g.stroke();g.restore();fillText(g,'2',m.endX,m.endY,12,a.color)}
+function drawActorFinal(g,a,s){
+ if(!s||s.visible===false||!s.motion)return;
+ const m=s.motion,r=M.rotationOnly(m.kind)?30:18;
+ g.save();g.translate(m.endX,m.endY);g.rotate(rad(m.endRotation??s.rotation));
+ g.fillStyle='#17191e';g.strokeStyle=a.color;g.lineWidth=2;
+ g.beginPath();g.moveTo(r+9,0);g.lineTo(r-5,-7);g.lineTo(r-5,7);g.closePath();g.fill();g.stroke();g.restore();
+}
 function drawCamera(g,c,s,ghost=false,showMotion=true,showCone=true,opacity=1){if(!s||s.visible===false)return;const color=ghost?'#92959F':c.color;g.save();g.globalAlpha=(ghost?.35:1)*(s.alpha??1)*opacity;
  if(showCone){const half=Math.atan((s.sensor||36)/(2*(s.lens||35))),angle=rad(s.rotation||0),distance=clamp(s.coneRange??365,80,1100);g.fillStyle=ghost?'#848A9510':c.color+'17';g.strokeStyle=ghost?'#9AA0AA55':c.color+'66';g.lineWidth=1.7;g.beginPath();g.moveTo(s.x,s.y);g.lineTo(s.x+distance*Math.cos(angle-half),s.y+distance*Math.sin(angle-half));g.arc(s.x,s.y,distance,angle-half,angle+half);g.closePath();g.fill();g.stroke()}
+ if(showMotion&&showCone&&!ghost&&s.motion?.kind==='pan'){
+  const half=Math.atan((s.sensor||36)/(2*(s.lens||35))),end=rad(s.motion.endRotation??s.rotation),distance=clamp(s.coneRange??365,80,1100);
+  g.save();g.strokeStyle=color;g.lineWidth=2;g.setLineDash([7,5]);g.beginPath();g.moveTo(s.x,s.y);
+  g.lineTo(s.x+distance*Math.cos(end-half),s.y+distance*Math.sin(end-half));g.arc(s.x,s.y,distance,end-half,end+half);g.closePath();g.stroke();g.restore();
+ }
  if(showMotion&&s.motion&&Math.hypot(s.motion.endX-s.x,s.motion.endY-s.y)>=9){const target={x:s.motion.endX,y:s.motion.endY};drawMotionRoute(g,s,color,ghost?.45:.94);g.save();g.translate(target.x,target.y);g.rotate(rad(s.motion.endRotation??s.rotation));g.strokeStyle=color;g.lineWidth=2.5;g.setLineDash([5,5]);g.strokeRect(-17,-12,34,24);g.setLineDash([]);g.restore();fillText(g,'2',target.x,target.y,15,color);if(!ghost){fillText(g,'POS 1',s.x,s.y+40,10,color,false);fillText(g,'POS 2',target.x,target.y+30,10,color,false)}}
  g.translate(s.x,s.y);g.save();g.rotate(rad(s.rotation||0));g.fillStyle=ghost?'#2C2E34':color;g.strokeStyle=ghost?'#B8BBC4':c.outline==='black'?'#09090B':'#F0F1F5';g.lineWidth=ghost?1.8:2.5;g.beginPath();g.roundRect(-21,-15,42,30,6);g.fill();g.stroke();g.beginPath();g.moveTo(20,-10);g.lineTo(33,0);g.lineTo(20,10);g.closePath();g.fill();g.restore();fillText(g,String(c.number||1),0,0,16,ghost?'#CFD0D5':'#101013');if(!ghost)fillText(g,c.name,0,-33,12,c.color,false);g.restore()}
 function drawEquipment(g,e,s,ghost=false,opacity=1){if(!s||s.visible===false)return;g.save();g.translate(s.x,s.y);g.rotate(rad(s.rotation||0));g.globalAlpha=(ghost?.25:1)*(s.alpha??1)*opacity;const lightColor=e.type==='light'?(e.lightMode==='color'?e.lightColor||'#FFFFFF':M.kelvinToHex(e.lightKelvin||5600)):e.color||'#C4C7CF';g.strokeStyle=ghost?'#979AA2':lightColor;g.fillStyle='#25262B';g.lineWidth=3;const kind=e.type;g.beginPath();if(kind==='light'){const modifier=e.lightModifier||'standard';if(modifier==='softbox'){const length={small:20,medium:26,large:33,'extra-large':40}[e.softboxSize]||26;g.roundRect(-length,-length*.72,length*2,length*1.44,5);g.fill();g.stroke();g.beginPath();g.moveTo(length,0);g.lineTo(length+17,-8);g.moveTo(length,0);g.lineTo(length+17,8);g.stroke()}else if(modifier==='spot'){g.moveTo(-16,-11);g.lineTo(10,-9);g.lineTo(28,-16);g.lineTo(28,16);g.lineTo(10,9);g.lineTo(-16,11);g.closePath();g.fill();g.stroke();g.beginPath();g.moveTo(28,0);g.lineTo(44,0);g.stroke()}else{g.arc(0,0,17,0,Math.PI*2);g.fill();g.stroke();g.beginPath();g.moveTo(0,0);g.lineTo(30,0);g.stroke()}}else if(['reflector','stand'].includes(kind)){g.arc(0,0,kind==='reflector'?22:17,0,Math.PI*2);g.fill();g.stroke();if(kind==='stand'){g.beginPath();g.moveTo(-9,-9);g.lineTo(9,9);g.moveTo(-9,9);g.lineTo(9,-9);g.stroke()}}
@@ -420,6 +516,7 @@ function setResizeHandle(obj){
 }
 function setContainsPoint(obj,p,tolerance=13){
  const q=objectLocal(obj,p);
+ if(obj.type==='column'&&obj.shape!=='square')return Math.hypot(q.x,q.y)<=(obj.w||80)/2+tolerance;
  if(isStructural(obj)){const length=Math.max(20,obj.w||80);
   const closest=clamp(q.x,0,length);
   return Math.hypot(q.x-closest,q.y)<=tolerance+5;
@@ -438,14 +535,14 @@ function drawSetObject(g,o){
  }else{
   const width=Math.max(20,o.w||110),height=Math.max(20,o.h||80);
   g.fillStyle='#45485166';g.strokeStyle='#777B85';g.lineWidth=2;
-  g.beginPath();g.roundRect(-width/2,-height/2,width,height,7);g.fill();g.stroke();
+  g.beginPath();if(o.type==='column'&&o.shape!=='square')g.arc(0,0,width/2,0,Math.PI*2);else g.roundRect(-width/2,-height/2,width,height,o.type==='column'?1:7);g.fill();g.stroke();
   fillText(g,o.name||'Furniture',0,0,13,'#9FA3AD',false);
  }
  g.restore();
 }
 function drawGhostStates(g,s,idx,mode='adjacent',moves=false){
  const indices=mode==='all'?s.beats.map((_,i)=>i).filter(i=>i!==idx):[idx-1,idx+1].filter(i=>i>=0&&i<s.beats.length);
- for(const i of indices){const other=s.beats[i];for(const a of s.actors)drawActor(g,a,other.positions[a.id],true);for(const c of s.cameras)drawCamera(g,c,other.cameras[c.id],true,moves,false);for(const e of s.equipment)if(!e.lockToSet)drawEquipment(g,e,other.equipment[e.id],true)}
+ for(const i of indices){const other=s.beats[i],current=s.beats[idx];for(const a of s.actors)if(M.visiblePair(current.positions[a.id],other.positions[a.id]))drawActor(g,a,other.positions[a.id],true);for(const c of s.cameras)if(M.visiblePair(current.cameras[c.id],other.cameras[c.id]))drawCamera(g,c,other.cameras[c.id],true,moves,false);for(const e of s.equipment)if(!e.lockToSet&&M.visiblePair(current.equipment[e.id],other.equipment[e.id]))drawEquipment(g,e,other.equipment[e.id],true)}
 }
 function drawDottedBeatPaths(g,s,idx,ghost){
  const beat=s.beats[idx],prev=s.beats[idx-1],next=s.beats[idx+1];if(!beat)return;
@@ -468,7 +565,7 @@ function draw(g,width,height,opts={}){const s=scene(),location=set();if(!s||!loc
  if(ghost)drawGhostStates(g,s,idx,exportMode?'adjacent':ui.ghostMode,exportMode?false:ui.showCameraMoves)
  for(const e of s.equipment)drawEquipment(g,e,e.lockToSet?e.fixedState:b.equipment[e.id]);
  for(const c of s.cameras)drawCamera(g,c,b.cameras[c.id],false,opts.moves??ui.showCameraMoves,opts.cones??ui.showCones);
- for(const a of s.actors){if(opts.moves??ui.showCameraMoves)drawActorMove(g,a,b.positions[a.id]);drawActor(g,a,b.positions[a.id])}
+ for(const a of s.actors){if(opts.moves??ui.showCameraMoves)drawActorMove(g,a,b.positions[a.id]);drawActor(g,a,b.positions[a.id]);if(opts.moves??ui.showCameraMoves)drawActorFinal(g,a,b.positions[a.id])}
  if(!exportMode&&ui.selection){const origin=selectionCenter(ui.selection,b);if(origin){const r=ringRadius(ui.selection,view.scale),color=detailsOf(ui.selection)?.color||'#EDEEF1';
 
    const selectedState=stateOf(ui.selection);
@@ -485,8 +582,8 @@ function draw(g,width,height,opts={}){const s=scene(),location=set();if(!s||!loc
    }
    if(selectedState?.motion){
     const m=selectedState.motion;
-    paintDirectionHandle(g,{x:m.endX,y:m.endY},m.endRotation??selectedState.rotation,color,'END');
-    for(const k of m.keys||[]){
+    paintDirectionHandle(g,{x:m.endX,y:m.endY},m.endRotation??selectedState.rotation,color,M.rotationOnly(m.kind)?'TURN':'END');
+    for(const k of (M.rotationOnly(m.kind)?[]:m.keys||[])){
      const active=ui.motionKeyId===k.id,size=(active?13:10)/view.scale;
      g.save();g.translate(k.x,k.y);g.rotate(Math.PI/4);
      g.fillStyle=active?'#F5F5F8':color;g.strokeStyle='#101114';g.lineWidth=2/view.scale;
@@ -497,7 +594,7 @@ function draw(g,width,height,opts={}){const s=scene(),location=set();if(!s||!loc
 g.strokeStyle=color;g.globalAlpha=.92;g.lineWidth=2/view.scale;g.setLineDash([7/view.scale,6/view.scale]);g.beginPath();g.arc(origin.x,origin.y,r,0,Math.PI*2);g.stroke();g.setLineDash([]);g.fillStyle=color;g.beginPath();g.arc(origin.x+r*Math.cos(rad(stateOf(ui.selection)?.rotation||0)),origin.y+r*Math.sin(rad(stateOf(ui.selection)?.rotation||0)),6/view.scale,0,Math.PI*2);g.fill();if(drag?.mode==='rotate'){fillText(g,`${Math.round(M.normalizeAngle(stateOf(ui.selection)?.rotation||0))}°`,origin.x,origin.y+r+24/view.scale,14/view.scale,color)} }}
  g.restore();if(exportMode){g.fillStyle='#E6E8EE';g.font='700 26px sans-serif';g.fillText(`${s.name}  /  ${b.name}`,28,39)}
 }
-function paint(){if(!canvas?.isConnected||!wrap)return;const width=Math.max(1,Math.floor(wrap.clientWidth)),height=Math.max(1,Math.floor(wrap.clientHeight)),ratio=Math.min(devicePixelRatio||1,2);if(canvas.width!==Math.round(width*ratio)||canvas.height!==Math.round(height*ratio)){canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio)}ctx.setTransform(ratio,0,0,ratio,0,0);draw(ctx,width,height,playback.frame?{frame:playback.frame,mode:playbackOptions().mode}:{});const t=document.getElementById('zoomText');if(t)t.textContent=`TOP VIEW · ${Math.round(ui.view.scale*100)}%`;canvas.dataset.viewX=String(ui.view.x);canvas.dataset.viewY=String(ui.view.y);canvas.dataset.viewScale=String(ui.view.scale)}
+function paint(){if(!canvas?.isConnected||!wrap)return;const width=Math.max(1,Math.floor(wrap.clientWidth)),height=Math.max(1,Math.floor(wrap.clientHeight)),ratio=Math.min(devicePixelRatio||1,2);if(canvas.width!==Math.round(width*ratio)||canvas.height!==Math.round(height*ratio)){canvas.width=Math.round(width*ratio);canvas.height=Math.round(height*ratio)}ctx.setTransform(ratio,0,0,ratio,0,0);draw(ctx,width,height,playback.frame?{frame:playback.frame,mode:playback.frame.loopReset?'fade':playbackOptions().mode}:{});const t=document.getElementById('zoomText');if(t)t.textContent=`TOP VIEW · ${Math.round(ui.view.scale*100)}%`;canvas.dataset.viewX=String(ui.view.x);canvas.dataset.viewY=String(ui.view.y);canvas.dataset.viewScale=String(ui.view.scale)}
 function hitAt(w){const sc=scene(),b=beat();if(!sc||!b)return null;
  // Selected object ring and camera path end take priority over object bodies.
  if(ui.selection){const o=stateOf(),center=selectionCenter(ui.selection,b);if(center){
@@ -506,15 +603,15 @@ function hitAt(w){const sc=scene(),b=beat();if(!sc||!b)return null;
    if(ui.selection.type==='camera'&&o&&ui.showCones){const end={x:o.x+clamp(o.coneRange??365,80,1100)*Math.cos(rad(o.rotation??0)),y:o.y+clamp(o.coneRange??365,80,1100)*Math.sin(rad(o.rotation??0))};if(Math.hypot(w.x-end.x,w.y-end.y)<tol)return{type:'cone-range',selection:ui.selection}}
 
    if(['camera','actor'].includes(ui.selection.type)&&o?.motion){
-    const e=o.motion,handle=directionHandle({x:e.endX,y:e.endY},e.endRotation??o.rotation,40);
+    const e=o.motion,handle=directionHandle({x:e.endX,y:e.endY},e.endRotation??o.rotation,M.rotationOnly(e.kind)?72:40);
     if(Math.hypot(w.x-handle.x,w.y-handle.y)<tol)return{type:'end-rotate',selection:ui.selection};
-    for(const k of e.keys||[]){
+    for(const k of (M.rotationOnly(e.kind)?[]:e.keys||[])){
      if(ui.motionKeyId===k.id){
       const h=directionHandle(k,k.rotation,32);
       if(Math.hypot(w.x-h.x,w.y-h.y)<tol)return{type:'key-rotate',keyId:k.id,selection:ui.selection};
      }
     }
-    for(const k of e.keys||[])if(Math.hypot(w.x-k.x,w.y-k.y)<tol)return{type:'keyframe',keyId:k.id,selection:ui.selection};
+    for(const k of (M.rotationOnly(e.kind)?[]:e.keys||[]))if(Math.hypot(w.x-k.x,w.y-k.y)<tol)return{type:'keyframe',keyId:k.id,selection:ui.selection};
     if(!['turn','pan'].includes(e.kind)&&Math.hypot(w.x-e.endX,w.y-e.endY)<tol)return{type:'endpoint',selection:ui.selection};
    }
    const r=ringRadius(ui.selection,ui.view.scale),d=Math.hypot(w.x-center.x,w.y-center.y);
@@ -525,7 +622,7 @@ function hitAt(w){const sc=scene(),b=beat();if(!sc||!b)return null;
  for(let i=sc.equipment.length-1;i>=0;i--){const e=sc.equipment[i],v=e.lockToSet?e.fixedState:b.equipment[e.id];if(v?.visible!==false&&v&&Math.hypot(w.x-v.x,w.y-v.y)<=Math.max(32,24/ui.view.scale))return{type:'object',selection:{type:'equipment',id:e.id}}}
  for(let i=set().objects.length-1;i>=0;i--){const o=set().objects[i];if(setContainsPoint(o,w,Math.max(12,12/ui.view.scale)))return{type:'object',selection:{type:'setobj',id:o.id}}}
  return null}
-function place(tool,pos){checkpoint();const p=project(),s=scene(),b=beat();let entry;if(['actor','camera'].includes(tool)){entry=M.addIdentity(p,s,tool,b,pos);ui.selection={type:tool,id:entry.id}}else if(tool.startsWith('equip:')){entry=M.addIdentity(p,s,'equipment',b,pos,tool.slice(6));ui.selection={type:'equipment',id:entry.id}}else{entry={id:M.uid(),name:tool==='furniture'?'Table':tool==='window'?'Window':tool==='wall'?'Wall':tool==='door'?'Door':'',type:tool,x:pos.x,y:pos.y,w:tool==='wall'||tool==='window'?160:tool==='door'?80:110,h:tool==='furniture'?80:0,rotation:0};set().objects.push(entry);ui.selection={type:'setobj',id:entry.id}}ui.showInspector=true;ui.tool='select';save();render()}
+function place(tool,pos){checkpoint();const p=project(),s=scene(),b=beat();let entry;if(['actor','camera'].includes(tool)){entry=M.addIdentity(p,s,tool,b,pos);ui.selection={type:tool,id:entry.id}}else if(tool.startsWith('equip:')){entry=M.addIdentity(p,s,'equipment',b,pos,tool.slice(6));ui.selection={type:'equipment',id:entry.id}}else{entry={id:M.uid(),name:tool==='column'?'Column':tool==='furniture'?'Table':tool==='window'?'Window':tool==='wall'?'Wall':tool==='door'?'Door':'',type:tool,x:pos.x,y:pos.y,w:tool==='wall'||tool==='window'?160:tool==='door'||tool==='column'?80:110,h:tool==='furniture'?80:tool==='column'?80:0,shape:tool==='column'?'round':undefined,rotation:0};set().objects.push(entry);ui.selection={type:'setobj',id:entry.id}}ui.showInspector=true;ui.tool='select';save();render()}
 function onDown(e){
  if(playback.playing||playback.frame){stopPlayback();playback.elapsedMs=0}
  const middle=e.pointerType==='mouse'&&e.button===1;
@@ -605,12 +702,14 @@ function onMove(e){
  if(drag.mode==='move'){
   state.x=drag.initial.x+dx/ui.view.scale;
   state.y=drag.initial.y+dy/ui.view.scale;
+  M.syncPreviousEndpoint(scene(),ui.selection?.type,ui.selection?.id,ui.beatId);
   // An end point is anchored: dragging the start cannot drag a defined destination.
   // Pan/turn in place is the one exception where both coordinates must coincide.
   if(state.motion&&['turn','pan'].includes(state.motion.kind)){state.motion.endX=state.x;state.motion.endY=state.y}
  }else if(drag.mode==='set-resize'){
   const w=world(p),local=objectLocal(state,w);
   if(isStructural(state))state.w=clamp(Math.round(local.x),20,2000);
+  else if(state.type==='column'){state.w=state.h=clamp(Math.round(Math.max(local.x,local.y)*2),20,2000)}
   else{state.w=clamp(Math.round(local.x*2),20,2000);state.h=clamp(Math.round(local.y*2),20,2000)}
  }else if(drag.mode==='cone-range'){
   const w=world(p),angle=rad(state.rotation??0),dx=w.x-state.x,dy=w.y-state.y;
@@ -661,7 +760,17 @@ function removeSelection(){const sel=ui.selection;if(!sel)return;checkpoint();co
 function edit(name,value){const sel=ui.selection,d=detailsOf(sel),o=stateOf(sel),p=project(),loc=set();
  if(name.startsWith('beatVisible:')&&d&&['actor','camera'].includes(sel.type)){
   const target=scene().beats.find(b=>b.id===name.slice('beatVisible:'.length));if(!target)return;
-  checkpoint();M.setBeatVisibility(scene(),sel.type,sel.id,target.id,value);save();render();return;
+  const hadState=!!stateOf();
+  checkpoint();M.setBeatVisibility(scene(),sel.type,sel.id,target.id,value);save();
+  if(!hadState&&stateOf()){render();return}
+  const field=sel.type==='actor'?'positions':'cameras';
+  const summary=app.querySelector?.('.beat-visibility-title small');
+  if(summary)summary.textContent=scene().beats.filter(b=>b[field]?.[sel.id]?.visible!==false&&b[field]?.[sel.id]).length+' / '+scene().beats.length;
+  for(const button of app.querySelectorAll?.('.roster-item')||[]){
+   const state=stateOf({type:button.dataset.kind,id:button.dataset.id}),hidden=!state||state.visible===false,badge=button.querySelector('em');
+   if(hidden&&!badge){const tag=document.createElement('em');tag.textContent='HIDDEN';button.append(tag)}else if(!hidden&&badge)badge.remove();
+  }
+  paint();return;
  }
  const exportKeys={exportImageGhosts:'imageGhosts',exportVideoGhosts:'videoGhosts',exportCones:'cones',exportPaths:'paths'};
  if(exportKeys[name]){p.exportPrefs={...exportPrefs(),[exportKeys[name]]:value};save();render();return}
@@ -678,20 +787,16 @@ function edit(name,value){const sel=ui.selection,d=detailsOf(sel),o=stateOf(sel)
  checkpoint();if(name==='itemName'){if(sel?.type==='setobj')o.name=value;else if(d)M.rename(p,d.id,value)}
  else if(['lightMode','lightModifier','softboxSize','lightColor','lightKelvin'].includes(name)&&d?.type==='light'){if(name==='lightKelvin')d.lightKelvin=clamp(Number(value),2000,12000);else if(name==='lightColor')d.lightColor=value;else if(name==='lightMode')d.lightMode=value==='color'?'color':'kelvin';else if(name==='lightModifier')d.lightModifier=['softbox','spot'].includes(value)?value:'standard';else if(name==='softboxSize')d.softboxSize=['small','medium','large','extra-large'].includes(value)?value:'medium'}
   else if(name==='itemOutline'&&d&&(sel.type==='actor'||sel.type==='camera')){M.setOutline(p,d.id,value)}
- else if(name==='itemColor'&&d){const error=sel.type==='equipment'?(d.color=value,null):M.recolor(p,d.id,value);if(error){notice(error);undo.pop();render();return}}
+ else if(name==='projectPreset'&&d&&['actor','camera'].includes(sel.type)){let error=null;if(value)error=M.applyPreset(p,scene(),sel.type,d.id,value);else{delete d.presetId;delete d.presetOverrides;delete d.presetBeatOverrides}if(error){undo.pop();notice(error)}ui.selection.id=d.id;save();render();return}
+ else if(name==='cameraSensorFormat'&&sel?.type==='camera'&&o){const preset=M.SENSOR_FORMATS.find(f=>f[0]===value);o.sensorFormat=preset?.[0]||'custom';if(preset?.[2]){o.sensor=preset[2];o.sensorHeight=preset[3]}for(const field of ['sensorFormat','sensorWidth','sensorHeight'])M.markPresetOverride(d,field,ui.beatId)}
+ else if((name==='itemColor'||name==='itemHex')&&d){const color=M.normalizeColor(value),error=!color?'Invalid HEX color':['equipment','setobj'].includes(sel.type)?(d.color=color,null):M.recolor(p,d.id,color);if(error){notice(error);undo.pop();render();return}}
  else if(name==='setName')loc.name=value;else if(name==='backgroundScale')loc.backgroundScale=clamp(Number(value)/100,.25,3);else if(name==='opacity')loc.opacity=Number(value)/100;else if(name==='darken')loc.darken=value;
+ else if(name==='columnShape'&&o?.type==='column')o.shape=value==='square'?'square':'round';
+ else if(name==='columnSize'&&o?.type==='column'){const size=Number(value);if(Number.isFinite(size))o.w=o.h=clamp(size,20,2000)}
  else if(['setWidth','setHeight','setLength'].includes(name)&&sel?.type==='setobj'&&o){const n=Number(value);if(Number.isFinite(n))o[name==='setHeight'?'h':'w']=clamp(n,20,2000)}
   else if(name==='lockToSet'&&d){if(value){d.fixedState=M.clone(o||M.defaultEquipmentState());d.lockToSet=true}else{for(const b of scene().beats)b.equipment[d.id]=M.clone(d.fixedState);d.lockToSet=false}}
- else if(name==='motionKind'&&['camera','actor'].includes(sel?.type)&&o){
-  if(value==='static')o.motion=null;
-  else{
-   const turnOnly=['pan','turn'].includes(value),old=o.motion,angle=rad(o.rotation||0),dist=145;
-   o.motion={kind:value,pathType:old?.pathType||'linear',keys:turnOnly?[]:M.clone(old?.keys||[]),
-    endX:turnOnly?o.x:old?.endX??o.x+dist*Math.cos(angle),
-    endY:turnOnly?o.y:old?.endY??o.y+dist*Math.sin(angle),
-    endRotation:old?.endRotation??o.rotation};
-  }
- }
+ else if(name==='motionKind'&&['camera','actor'].includes(sel?.type)&&o)M.setMotionKind(o,value);
+ else if(['turnLeft','turnRight'].includes(name)&&o)o.rotationDirection=value?(name==='turnLeft'?'left':'right'):'shortest';
  else if(name==='motionPath'&&o?.motion)o.motion.pathType=value==='smooth'?'smooth':'linear';
  else if(name.startsWith('keyframe:')&&o?.motion){
   const [,id,field]=name.split(':'),key=o.motion.keys?.find(k=>k.id===id);
@@ -702,8 +807,10 @@ function edit(name,value){const sel=ui.selection,d=detailsOf(sel),o=stateOf(sel)
   }
  }
  else if(['endX','endY','endRotation'].includes(name)&&o?.motion){o.motion[name]=Number(value);if(['pan','turn'].includes(o.motion.kind)){o.motion.endX=o.x;o.motion.endY=o.y}}
- else if(o&&['x','y','rotation','lens','sensor','coneRange'].includes(name)){o[name]=name==='coneRange'?clamp(Number(value),80,1100):Number(value);if(o.motion&&['pan','turn'].includes(o.motion.kind)){o.motion.endX=o.x;o.motion.endY=o.y}}
+ else if(o&&['x','y','rotation','lens','sensor','sensorHeight','coneRange'].includes(name)){o[name]=name==='coneRange'?clamp(Number(value),80,1100):Number(value);if(o.motion&&['pan','turn'].includes(o.motion.kind)){o.motion.endX=o.x;o.motion.endY=o.y}}
  else if(name==='visible'&&o)o.visible=value;
+ if(sel?.type==='camera'&&['sensor','sensorHeight','lens'].includes(name)){M.markPresetOverride(d,name==='sensor'?'sensorWidth':name,ui.beatId);if(name!=='lens'){o.sensorFormat='custom';M.markPresetOverride(d,'sensorFormat',ui.beatId)}}
+ if(['x','y'].includes(name)&&sel)M.syncPreviousEndpoint(scene(),sel.type,sel.id,ui.beatId);
  save();setTimeout(render,0)}
 
 function createScene(name,setId){
@@ -711,6 +818,8 @@ function createScene(name,setId){
  checkpoint();
  const sourceBeat=source||original?.beats?.[0]||{positions:{},cameras:{},equipment:{}};
  const newScene={id:M.uid(),name, setId:p.sets.some(s=>s.id===setId)?setId:original?.setId||p.sets[0].id,actors:M.clone(original?.actors||[]),cameras:M.clone(original?.cameras||[]),equipment:M.clone(original?.equipment||[]),beats:[{id:M.uid(),name:'Beat 01',positions:M.clone(sourceBeat.positions||{}),cameras:M.clone(sourceBeat.cameras||{}),equipment:M.clone(sourceBeat.equipment||{})}]};
+ M.remapPresetBeats(newScene,{[sourceBeat.id]:newScene.beats[0].id});
+ for(const [key,type] of [['actors','actor'],['cameras','camera']])for(const entry of newScene[key])if(entry.presetId)M.detachSharedIdentity(p,newScene,type,entry);
  p.scenes.push(newScene);ui.sceneId=newScene.id;ui.beatId=newScene.beats[0].id;ui.selection=null;ui.showMenu=false;ui.dialog=null;ui.page='editor';ui.autoFit=true;save();render()
 }
 function createSet(name){
@@ -722,41 +831,54 @@ function saveEntityDialog(){
  const d=ui.dialog;if(!d)return;const input=app.querySelector('#entityEditName'),name=input?.value.trim();
  if(!name){notice('Enter a name');input?.focus();return}
  const p=project();
- if(d.kind==='new-project'){const created=M.createProject(name);database.projects.push(created);ui.dialog=null;ui.previewDraft=undefined;openProject(created.id);save();return}
+ if(d.kind==='new-project'){const defaults=readSensorFields('projectCamera'),error=sensorFieldsError(defaults);if(error)return notice(error);const created=M.createProject(name);created.cameraDefaults=defaults;for(const sc of created.scenes)for(const b of sc.beats)for(const state of Object.values(b.cameras))Object.assign(state,{sensor:defaults.sensorWidth,sensorHeight:defaults.sensorHeight,sensorFormat:defaults.sensorFormat,lens:defaults.lens});database.projects.push(created);ui.dialog=null;ui.previewDraft=undefined;openProject(created.id);save();return}
  if(d.kind==='new-scene'){const setId=app.querySelector('#entityEditSet')?.value;createScene(name,setId);return}
  if(d.kind==='new-set'){ui.dialog=null;createSet(name);return}
  const item=d.kind==='edit-project'?database.projects.find(x=>x.id===d.id):d.kind==='edit-scene'?p?.scenes.find(x=>x.id===d.id):d.kind==='edit-set'?p?.sets.find(x=>x.id===d.id):null;
  if(!item){ui.dialog=null;render();return}
- checkpoint();item.name=name;
+ if(d.kind==='edit-project'){const defaults=readSensorFields('projectCamera',item.cameraDefaults),error=sensorFieldsError(defaults);if(error)return notice(error);checkpoint();item.cameraDefaults=defaults}else checkpoint();item.name=name;
  if(['edit-project','edit-scene'].includes(d.kind)&&ui.previewDraft!==undefined)item.customPreview=ui.previewDraft||null;
  if(d.kind==='edit-scene'){const setId=app.querySelector('#entityEditSet')?.value;if(p.sets.some(x=>x.id===setId))item.setId=setId}
  if(d.kind==='edit-set'){const opacity=Number(app.querySelector('#entityEditOpacity')?.value),scale=Number(app.querySelector('#entityEditScale')?.value);if(Number.isFinite(opacity))item.opacity=clamp(opacity/100,.05,1);if(Number.isFinite(scale))item.backgroundScale=clamp(scale/100,.25,3);item.darken=!!app.querySelector('#entityEditDarken')?.checked}
  ui.dialog=null;ui.previewDraft=undefined;save();render();notice('Changes saved')
 }
 
-function download(blob,name){
- if(window.Capacitor?.isNativePlatform?.()){
-  if(!window.Block4FilmMobile?.saveFile){notice('Native export is not available on this device');return}
-  window.Block4FilmMobile.saveFile(blob,name).catch(error=>{
-   console.error('Block4Film mobile export failed',error);
-   notice('Could not share export. Check storage permissions and available space.');
-  });
-  return;
- }
- const u=URL.createObjectURL(blob),link=document.createElement('a');link.href=u;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),30000)
+async function download(blob,name){
+ try{
+  if(window.Capacitor?.isNativePlatform?.()){
+   if(!window.Block4FilmMobile?.saveFile)throw Error('Native file sharing is unavailable. Please restart the app.');
+   const result=await window.Block4FilmMobile.saveFile(blob,name);
+   return result&&typeof result==='object'?result:{status:'shared'};
+  }
+  const nav=globalThis.navigator;
+  if(nav?.share&&nav.canShare&&typeof File!=='undefined'&&nav.maxTouchPoints>0){
+   const file=new File([blob],name,{type:blob.type||'application/octet-stream'});
+   if(nav.canShare({files:[file]})){
+    try{await nav.share({files:[file],title:name});return {status:'shared'}}
+    catch(error){if(error?.name==='AbortError')return {status:'cancelled'};console.warn('Share unavailable; using browser download',error)}
+   }
+  }
+  const u=URL.createObjectURL(blob),link=document.createElement('a');link.href=u;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(u),30000);
+  return {status:'download-started'};
+ }catch(error){console.error('Export failed',error);notice('Export failed: '+(error?.message||'Could not save or share the file.'));return {status:'failed'}}
+}
+function exportNotice(result,label){
+ if(result?.status==='cancelled')notice('Export cancelled');
+ else if(result?.status==='shared')notice(label+' shared');
+ else if(result?.status==='download-started')notice(label+' download started');
 }
 function exportCanvas(bid,width=1600,height=1050){const c=document.createElement('canvas');c.width=width;c.height=height;draw(c.getContext('2d'),width,height,{beatId:bid,export:true,ghost:exportPrefs().imageGhosts,paths:exportPrefs().paths,cones:exportPrefs().cones});return c}
 const pngBlob=c=>new Promise(resolve=>c.toBlob(resolve,'image/png'));
 async function waitBackdrop(){const src=set()?.background;if(!src||cached(src))return;await new Promise(resolve=>{const start=Date.now();const t=setInterval(()=>{if(cached(src)||Date.now()-start>3000){clearInterval(t);resolve()}},60)})}
-async function savePNG(){await waitBackdrop();const blob=await pngBlob(exportCanvas(ui.beatId));if(blob)download(blob,`${safe(scene().name)}-${safe(beat().name)}.png`);notice('Beat image exported')}
+async function savePNG(){await waitBackdrop();const blob=await pngBlob(exportCanvas(ui.beatId));if(blob)exportNotice(await download(blob,`${safe(scene().name)}-${safe(beat().name)}.png`),'Beat image')}
 function crc32(a){let c=-1;for(const x of a){c^=x;for(let k=0;k<8;k++)c=(c>>>1)^((c&1)?0xEDB88320:0)}return(c^-1)>>>0}
 function zip(files){const encoder=new TextEncoder(),chunks=[],directory=[];let offset=0;const n16=x=>[x&255,(x>>>8)&255],n32=x=>[x&255,(x>>>8)&255,(x>>>16)&255,(x>>>24)&255];for(const f of files){const name=encoder.encode(f.name),bytes=f.data,crc=crc32(bytes),size=bytes.length;const header=new Uint8Array([...n32(0x04034b50),...n16(20),...n16(0),...n16(0),...n16(0),...n16(0),...n32(crc),...n32(size),...n32(size),...n16(name.length),...n16(0)]);chunks.push(header,name,bytes);directory.push(new Uint8Array([...n32(0x02014b50),...n16(20),...n16(20),...n16(0),...n16(0),...n16(0),...n16(0),...n32(crc),...n32(size),...n32(size),...n16(name.length),...n16(0),...n16(0),...n16(0),...n16(0),...n32(0),...n32(offset)]),name);offset+=header.length+name.length+size}const sz=directory.reduce((n,b)=>n+b.length,0),end=new Uint8Array([...n32(0x06054b50),...n16(0),...n16(0),...n16(files.length),...n16(files.length),...n32(sz),...n32(offset),...n16(0)]);return new Blob([...chunks,...directory,end],{type:'application/zip'})}
-async function saveZIP(){await waitBackdrop();notice('Preparing PNGs…');const entries=[];for(let i=0;i<scene().beats.length;i++){const b=scene().beats[i],blob=await pngBlob(exportCanvas(b.id));entries.push({name:`${String(i+1).padStart(2,'0')}-${safe(b.name)}.png`,data:new Uint8Array(await blob.arrayBuffer())})}download(zip(entries),`${safe(scene().name)}-beats.zip`);notice(`${entries.length} images exported`)}
+async function saveZIP(){await waitBackdrop();notice('Preparing PNGs…');const entries=[];for(let i=0;i<scene().beats.length;i++){const b=scene().beats[i],blob=await pngBlob(exportCanvas(b.id));entries.push({name:`${String(i+1).padStart(2,'0')}-${safe(b.name)}.png`,data:new Uint8Array(await blob.arrayBuffer())})}exportNotice(await download(zip(entries),`${safe(scene().name)}-beats.zip`),`${entries.length} images`)}
 async function saveVideo(){if(playback.exporting)return;await waitBackdrop();if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream)return notice('Video export is unavailable on this device');const mime=['video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm'].find(x=>MediaRecorder.isTypeSupported(x));if(!mime)return notice('This device cannot encode WebM video');
  stopPlayback();playback.frame=null;const config=playbackOptions(),beats=M.clone(scene().beats),title=scene().name,projectName=project().name,duration=P.duration(beats,config),c=document.createElement('canvas');c.width=1280;c.height=814;const g=c.getContext('2d'),stream=c.captureStream(30),chunks=[];let rec,failed=false;playback.exporting=true;
- try{rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:3_000_000});const done=new Promise((resolve,reject)=>{rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};rec.onstop=resolve;rec.onerror=reject});rec.start(1000);notice(`Recording ${config.speed}× · ${(duration/1000).toFixed(1)}s · ${config.mode}`);const started=performance.now();while(performance.now()-started<duration){const elapsed=performance.now()-started,frame=P.frameAt(beats,elapsed,config);draw(g,c.width,c.height,{export:true,frame,mode:config.mode,ghost:exportPrefs().videoGhosts,cones:exportPrefs().cones,paths:exportPrefs().paths});await new Promise(requestAnimationFrame)}draw(g,c.width,c.height,{export:true,frame:P.frameAt(beats,duration,config),mode:config.mode,ghost:exportPrefs().videoGhosts,cones:exportPrefs().cones,paths:exportPrefs().paths});await new Promise(resolve=>setTimeout(resolve,150));rec.stop();await done;const blob=new Blob(chunks,{type:mime});if(blob.size===0)throw Error('Encoder created an empty file');download(blob,`${safe(projectName)}-${safe(title)}-animated-${config.speed}x.webm`);notice('Animated WebM exported')}catch(err){failed=true;console.error('Video export failed',err);notice('Video export failed: '+(err.message||'Unknown error'))}finally{if(rec?.state==='recording')rec.stop();stream.getTracks().forEach(t=>t.stop());playback.exporting=false;if(!failed)paint()}}
+ try{rec=new MediaRecorder(stream,{mimeType:mime,videoBitsPerSecond:3_000_000});const done=new Promise((resolve,reject)=>{rec.ondataavailable=e=>{if(e.data.size)chunks.push(e.data)};rec.onstop=resolve;rec.onerror=reject});rec.start(1000);notice(`Recording ${config.speed}× · ${(duration/1000).toFixed(1)}s · ${config.mode}`);const started=performance.now();while(performance.now()-started<duration){const elapsed=performance.now()-started,frame=P.frameAt(beats,elapsed,config);draw(g,c.width,c.height,{export:true,frame,mode:config.mode,ghost:exportPrefs().videoGhosts,cones:exportPrefs().cones,paths:exportPrefs().paths});await new Promise(requestAnimationFrame)}draw(g,c.width,c.height,{export:true,frame:P.frameAt(beats,duration,config),mode:config.mode,ghost:exportPrefs().videoGhosts,cones:exportPrefs().cones,paths:exportPrefs().paths});await new Promise(resolve=>setTimeout(resolve,150));rec.stop();await done;const blob=new Blob(chunks,{type:mime});if(blob.size===0)throw Error('Encoder created an empty file');exportNotice(await download(blob,`${safe(projectName)}-${safe(title)}-animated-${config.speed}x.webm`),'Animated WebM')}catch(err){failed=true;console.error('Video export failed',err);notice('Video export failed: '+(err.message||'Unknown error'))}finally{if(rec?.state==='recording')rec.stop();stream.getTracks().forEach(t=>t.stop());playback.exporting=false;if(!failed)paint()}}
 
-function backup(){download(new Blob([JSON.stringify({format:'blockascene',version:2,project:project()},null,2)],{type:'application/json'}),`${safe(project().name)}.blockascene`);notice('Project backup exported')}
+async function backup(p=project()){if(!p)return notice('Open a project before exporting.');exportNotice(await download(new Blob([JSON.stringify({format:'blockascene',version:2,project:p},null,2)],{type:'application/json'}),`${safe(p.name)}.blockascene`),'Project backup')}
 async function readProjectText(file){
  if(typeof file?.content==='string')return file.content;
  if(typeof file?.text==='string')return file.text;
@@ -781,6 +903,7 @@ async function importProject(file){
   const p=M.migrate(raw.project||raw);
   if(database.projects.some(x=>x.id===p.id))p.id=M.uid();
   database.projects.push(p);
+  ui.dialog=null;ui.previewDraft=undefined;ui.pendingPresetDelete=null;
   openProject(p.id);
   save();
   queuePreviews(p);
@@ -793,11 +916,28 @@ async function importProject(file){
 async function importBackground(file){if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type))return notice('Use PNG, JPG, or WebP');if(file.size>12e6)return notice('Choose an image under 12 MB');const reader=new FileReader();reader.onload=()=>{const target=ui.dialog?.kind==='edit-set'?project()?.sets.find(x=>x.id===ui.dialog.id):set();if(!target)return;checkpoint();target.background=reader.result;target.backgroundScale=1;const scaleInput=app.querySelector?.('#entityEditScale');if(scaleInput)scaleInput.value='100';target.opacity=.8;target.darken=true;images.clear();if(ui.dialog?.kind!=='edit-set'){ui.selection={type:'background'};ui.showInspector=true}save();render();notice('Floor plan imported')};reader.readAsDataURL(file)}
 async function action(e){const target=e.target.closest('[data-action]');if(!target)return;e.preventDefault();e.stopPropagation();const a=target.dataset.action,id=target.dataset.id;if(a==='open-manual'){stopPlayback();ui.manualReturn=ui.page;ui.page='manual';ui.manualTab='start';ui.manualScroll={};ui.showMenu=false;ui.showLayers=false;ui.showExportPanel=false;render();return}if(a==='close-manual'){ui.page=ui.manualReturn||'workspace';render();return}if(a==='manual-tab'){const el=app.querySelector('.manual-content');if(el)ui.manualScroll[ui.manualTab]=el.scrollTop;ui.manualTab=target.dataset.tab||'start';render();return}if(a==='toggle-playback'){togglePlayback();return}if(playback.playing){playback.elapsedMs=elapsedPlayback();stopPlayback();}
  if(a==='library-view'){ui.libraryView=target.dataset.view==='list'?'list':'grid';render()}
+ else if(a==='save-instance-preset'){
+  const selected=ui.selection;if(!selected||!['actor','camera'].includes(selected.type))return;
+  const entry=detailsOf(selected);checkpoint();try{M.saveInstancePreset(project(),scene(),selected.type,entry.id,ui.beatId);ui.selection.id=entry.id;save();render();notice('Saved as project preset')}catch(error){undo.pop();notice(error.message)}
+ }else if(a==='reset-instance-preset'){
+  checkpoint();const error=M.resetPresetOverrides(project(),scene(),ui.selection.type,ui.selection.id);if(error){undo.pop();notice(error);return}save();render();notice('Project preset values restored')
+ }else if(a==='new-library-preset'){
+  const p=database.projects.find(p=>p.id===target.dataset.project);if(!p)return;
+  checkpoint();const preset=M.createPreset(p,target.dataset.type);save();render();
+  const library=app.querySelector('#'+target.dataset.type+'Library'),row=app.querySelector('#presetRow'+preset.id);if(library)library.open=true;if(row){row.open=true;row.scrollIntoView({block:'nearest'});app.querySelector('#preset'+preset.id+'Name')?.focus({preventScroll:true})}
+ }else if(a==='update-library-preset'){
+  const p=database.projects.find(p=>p.id===target.dataset.project),prefix='preset'+id,type=target.dataset.type;
+  const changes={name:app.querySelector('#'+prefix+'Name')?.value,number:Number(app.querySelector('#'+prefix+'Number')?.value),color:app.querySelector('#'+prefix+'Color')?.value,...(type==='camera'?readSensorFields(prefix):{})};
+  checkpoint();const error=M.updatePreset(p,type,id,changes);if(error){undo.pop();notice(error);return}save();render();notice('Project preset updated; scene movement preserved')
+ }else if(a==='request-preset-delete'){ui.pendingPresetDelete={id,type:target.dataset.type};render()}
+ else if(a==='cancel-preset-delete'){ui.pendingPresetDelete=null;render()}
+ else if(a==='confirm-preset-delete'){const p=database.projects.find(p=>p.id===target.dataset.project);if(p){checkpoint();M.removePreset(p,target.dataset.type,id);ui.pendingPresetDelete=null;save();render();notice('Preset removed; placed objects preserved')}}
  else if(a==='edit-current-project'){openEditDialog('edit-project',project()?.id)}
  else if(a==='new-project'){openEditDialog('new-project')}
  else if(a==='open-project')openProject(id);else if(a==='go-back'){if(ui.page==='editor'){stopPlayback();ui.page='project';ui.showMenu=false;ui.showExportPanel=false;ui.context=null;render()}else if(ui.page==='project')home()}else if(a==='home')home();else if(a==='all-scenes'){stopPlayback();ui.libraryFilter='';ui.page='project';ui.showMenu=false;render()}else if(a==='choose-scene')openScene(id);else if(a==='open-context'){const rect=target.getBoundingClientRect();openContext(target.dataset.kind,id,rect.right-210,rect.bottom+4)}else if(a==='close-context'){ui.context=null;render()}else if(a==='context-action'){const c=ui.context;ui.context=null;if(c){if(c.kind==='beat')beatCommand(c.id,target.dataset.command);else manageItem(c.kind,c.id,target.dataset.command)}}
- else if(a==='toggle-menu'){ui.showMenu=!ui.showMenu;render()}else if(a==='toggle-editor-ghosts'){if(ui.ghostMode==='off')ui.ghostMode=ui.previousGhostMode||'adjacent';else{ui.previousGhostMode=ui.ghostMode;ui.ghostMode='off'}render()}else if(a==='toggle-layers'){ui.showLayers=!ui.showLayers;ui.showExportPanel=false;if(ui.showLayers&&window.innerWidth<850)ui.showInspector=false;render()}else if(a==='toggle-inspector'){if(!ui.selection)ui.selection={type:'background'};ui.showInspector=!ui.showInspector;if(ui.showInspector&&window.innerWidth<850)ui.showLayers=false;render()}else if(a==='toggle-pin'){const key=target.dataset.panel==='layers'?'layersPinned':'propertiesPinned';ui.layout[key]=!ui.layout[key];saveLayout();render()}else if(a==='switch-panel-side'){const p=target.dataset.panel==='layers'?'layers':'properties';ui.layout[p+'Side']=ui.layout[p+'Side']==='left'?'right':'left';ui.layout[p+'FloatX']=null;ui.layout[p+'FloatY']=null;saveLayout();render()}else if(a==='reset-layout'){ui.layout=defaultLayout();saveLayout();render()}else if(a==='toggle-timeline'){ui.layout.timelineCollapsed=!ui.layout.timelineCollapsed;saveLayout();render()}else if(a==='toggle-export-panel'){ui.showExportPanel=!ui.showExportPanel;ui.showLayers=false;render()}else if(a==='close-inspector'){ui.showInspector=false;render()}else if(a==='close-dialog'){ui.dialog=null;ui.videoDraft=null;ui.previewDraft=undefined;render()}else if(a==='save-entity-dialog'){saveEntityDialog()}else if(a==='confirm-delete'){applyConfirmedDelete()}else if(a==='choose-preview-image'){previewInput?.click()}else if(a==='reset-preview-image'){ui.previewDraft='';render()}else if(a==='replace-set-background'){fileInput.click()}else if(a==='clear-set-background'){const st=project()?.sets.find(s=>s.id===ui.dialog?.id);if(st){checkpoint();st.background=null;images.clear();save();render();notice('Floor plan image removed')}}else if(a==='reset-beat-duration'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){checkpoint();delete b.holdMs;ui.dialog=null;save();render()}}else if(a==='save-beat-dialog'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){const name=app.querySelector('#beatEditName').value.trim(),secs=Number(app.querySelector('#beatEditHold').value);if(!name||!Number.isFinite(secs)||secs<.5||secs>30)return notice('Enter a name and duration between 0.5 and 30 seconds');checkpoint();b.name=name;b.holdMs=Math.round(secs*1000);ui.dialog=null;save();render()}}
- else if(a==='undo')undoAction();else if(a==='redo')redoAction();else if(a==='tool'){ui.tool=target.dataset.tool||'select';render()}else if(a==='toggle-structure'){ui.tool=ui.tool==='structure'?'select':'structure';render()}else if(a==='place-structure'){ui.tool=target.dataset.shape==='window'?'window':'wall';render()}else if(a==='toggle-equipment'){ui.tool=ui.tool==='equipment'?'select':'equipment';render()}else if(a==='place-equipment'){ui.tool='equip:'+target.dataset.shape;render()}
+ else if(a==='toggle-menu'){ui.showMenu=!ui.showMenu;render()}else if(a==='toggle-editor-ghosts'){if(ui.ghostMode==='off')ui.ghostMode=ui.previousGhostMode||'adjacent';else{ui.previousGhostMode=ui.ghostMode;ui.ghostMode='off'}render()}else if(a==='toggle-layers'){togglePanel('layers')}else if(a==='toggle-inspector'){togglePanel('properties')}else if(a==='activate-panel'){ui.activePanel=target.dataset.panel;render()}else if(a==='toggle-pin'){const key=target.dataset.panel==='layers'?'layersPinned':'propertiesPinned';ui.layout[key]=!ui.layout[key];saveLayout();render()}else if(a==='switch-panel-side'){const p=target.dataset.panel==='layers'?'layers':'properties';ui.layout[p+'Side']=ui.layout[p+'Side']==='left'?'right':'left';ui.layout[p+'FloatX']=null;ui.layout[p+'FloatY']=null;saveLayout();render()}else if(a==='reset-layout'){ui.layout=defaultLayout();saveLayout();render()}else if(a==='toggle-timeline'){ui.layout.timelineCollapsed=!ui.layout.timelineCollapsed;saveLayout();render()}else if(a==='toggle-export-panel'){ui.showExportPanel=!ui.showExportPanel;ui.showLayers=false;render()}else if(a==='close-inspector'){ui.showInspector=false;render()}else if(a==='close-dialog'){ui.dialog=null;ui.videoDraft=null;ui.previewDraft=undefined;render()}else if(a==='save-entity-dialog'){saveEntityDialog()}else if(a==='confirm-delete'){applyConfirmedDelete()}else if(a==='choose-preview-image'){previewInput?.click()}else if(a==='reset-preview-image'){ui.previewDraft='';render()}else if(a==='replace-set-background'){fileInput.click()}else if(a==='clear-set-background'){const st=project()?.sets.find(s=>s.id===ui.dialog?.id);if(st){checkpoint();st.background=null;images.clear();save();render();notice('Floor plan image removed')}}else if(a==='reset-beat-duration'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){checkpoint();delete b.holdMs;ui.dialog=null;save();render()}}else if(a==='save-beat-dialog'){const b=scene()?.beats.find(x=>x.id===ui.dialog?.id);if(b){const name=app.querySelector('#beatEditName').value.trim(),secs=Number(app.querySelector('#beatEditHold').value);if(!name||!Number.isFinite(secs)||secs<.5||secs>30)return notice('Enter a name and duration between 0.5 and 30 seconds');checkpoint();b.name=name;b.holdMs=Math.round(secs*1000);ui.dialog=null;save();render()}}
+ else if(a==='set-loop'){const next=playbackOptions().loop===target.dataset.loop?'off':target.dataset.loop;stopPlayback();playback.elapsedMs=0;project().playback={...playbackOptions(),loop:next};save();render()}
+ else if(a==='undo')undoAction();else if(a==='redo')redoAction();else if(a==='tool'){ui.tool=target.dataset.tool||'select';render()}else if(a==='toggle-structure'){ui.tool=ui.tool==='structure'?'select':'structure';render()}else if(a==='place-structure'){ui.tool=['wall','window','column'].includes(target.dataset.shape)?target.dataset.shape:'wall';render()}else if(a==='toggle-equipment'){ui.tool=ui.tool==='equipment'?'select':'equipment';render()}else if(a==='place-equipment'){ui.tool='equip:'+target.dataset.shape;render()}
  else if(a==='choose-set'){checkpoint();scene().setId=id;ui.showMenu=false;ui.selection=null;save();render()}
  else if(a==='new-scene')openEditDialog('new-scene');else if(a==='new-set')openEditDialog('new-set');else if(a==='choose-beat')chooseBeat(id);else if(a==='add-beat')addBeat();
  else if(a==='previous-beat'||a==='next-beat'){const list=scene().beats,idx=list.findIndex(b=>b.id===ui.beatId),step=a==='next-beat'?1:-1;chooseBeat(list[clamp(idx+step,0,list.length-1)].id)}
@@ -813,7 +953,7 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
  else if(a==='remove-motion-keyframe'){
   const s=stateOf();if(s?.motion?.keys){checkpoint();s.motion.keys=s.motion.keys.filter(k=>k.id!==id);save();render()}
  }
- else if(a==='select-object'){ui.selection={type:target.dataset.kind,id};ui.showLayers=false;ui.showExportPanel=false;ui.showInspector=true;render()}
+ else if(a==='select-object'){ui.selection={type:target.dataset.kind,id};ui.showLayers=false;ui.showExportPanel=false;ui.showInspector=true;ui.activePanel='properties';render()}
  else if(a==='rename-beat'){ui.dialog={kind:'edit-beat',id:ui.beatId};render()}
  else if(a==='delete-beat'){if(scene().beats.length===1)return notice('A scene needs at least one beat');ui.dialog={kind:'confirm-delete',targetKind:'beat',id:ui.beatId,name:beat()?.name||'Beat'};render()}
  else if(a==='quick-color'){edit('itemColor',target.dataset.color)}else if(a==='delete-selection')removeSelection();
@@ -823,13 +963,14 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
     catch(error){console.error('Native file picker failed',error);notice('Could not open file picker: '+(error?.message||'Unknown error'))}
    }else projectInput.click();
   }else if(a==='select-bg'){ui.selection={type:'background'};ui.showInspector=true;ui.showMenu=false;render()}
- else if(a==='clear-bg'){checkpoint();set().background=null;images.clear();save();render()}else if(a==='export-image')await savePNG();else if(a==='export-zip')await saveZIP();else if(a==='export-video-dialog'){ui.showExportPanel=false;ui.videoDraft={...playbackOptions()};ui.dialog={kind:'video'};render()}else if(a==='confirm-video-export'){const c=ui.videoDraft||playbackOptions();project().playback=P.settings({...playbackOptions(),speed:Number(c.speed),holdMs:Number(c.holdMs),mode:c.mode});ui.videoDraft=null;ui.dialog=null;save();render();await saveVideo()}else if(a==='export-video')await saveVideo();else if(a==='save-project'){clearTimeout(saveTimer);await writeDB();await queuePreviews(project());notice('Project saved locally')}else if(a==='backup')backup()}
+ else if(a==='clear-bg'){checkpoint();set().background=null;images.clear();save();render()}else if(a==='export-image')await savePNG();else if(a==='export-zip')await saveZIP();else if(a==='export-video-dialog'){ui.showExportPanel=false;ui.videoDraft={...playbackOptions()};ui.dialog={kind:'video'};render()}else if(a==='confirm-video-export'){const c=ui.videoDraft||playbackOptions();project().playback=P.settings({...playbackOptions(),speed:Number(c.speed),holdMs:Number(c.holdMs),mode:c.mode});ui.videoDraft=null;ui.dialog=null;save();render();await saveVideo()}else if(a==='export-video')await saveVideo();else if(a==='save-project'){clearTimeout(saveTimer);await writeDB();await queuePreviews(project());notice('Project saved locally')}else if(a==='backup')await backup();else if(a==='export-project-data')await backup(database.projects.find(p=>p.id===target.dataset.id))}
 // Dismiss on pointer-down for mouse, pen and touch, keeping the outside target intact.
 app.addEventListener('pointerdown',e=>{
  if(!ui.showMenu||e.target.closest('.drawer,[data-action="toggle-menu"]'))return;
  ui.showMenu=false;
  for(const drawer of app.querySelectorAll?.('.drawer.open')||[])drawer.classList.remove('open');
 },true);
+app.addEventListener('toggle',e=>{const group=e.target?.dataset?.propertyGroup;if(group){ui.layout.propertyGroups??={};ui.layout.propertyGroups[group]=e.target.open;saveLayout()}},true);
 app.addEventListener('click',action);
 app.addEventListener('scroll',e=>{if(ui.page==='manual'&&e.target?.classList?.contains('manual-content'))ui.manualScroll[ui.manualTab]=e.target.scrollTop},true);
 let panelPointer=null;
@@ -839,6 +980,7 @@ function panelBounds(root,el){
  return {rootRect,left:area.left-rootRect.left+8,top:area.top-rootRect.top+8,right:area.right-rootRect.left-8,bottom:area.bottom-rootRect.top-8};
 }
 app.addEventListener('pointerdown',e=>{
+ if(compactPanelMode())return;
  const grip=e.target.closest('[data-resize-panel]'),handle=grip?null:e.target.closest('[data-drag-panel]');
  if(!grip&&!handle)return;
  if(e.pointerType==='mouse'&&e.button!==0)return;
@@ -901,6 +1043,7 @@ app.addEventListener('pointermove',e=>{if(holdStart&&Math.hypot(e.clientX-holdSt
 app.addEventListener('pointerup',()=>{clearTimeout(holdTimer);holdStart=null});
 app.addEventListener('pointercancel',()=>{clearTimeout(holdTimer);holdStart=null});
 app.addEventListener('input',e=>{
+ if(e.target?.dataset?.sensorDimension){const select=app.querySelector('#'+e.target.dataset.sensorDimension+'Format');if(select)select.value='custom'}
  if(e.target?.id==='entityEditScale'){const output=app.querySelector('#entityEditScaleValue');if(output)output.textContent=e.target.value+'%';return}
  if(e.target?.id!=='librarySearch')return;
  ui.libraryFilter=e.target.value;
@@ -912,7 +1055,7 @@ app.addEventListener('input',e=>{
  }
  const empty=app.querySelector?.('.library-empty');if(empty)empty.hidden=visible>0||!q;
 });
-app.addEventListener('change',e=>{if(e.target?.id==='librarySort'){ui.librarySort=e.target.value;render();return}if(e.target.name){const v=e.target.type==='checkbox'?e.target.checked:e.target.value;if(e.target.name==='playbackSpeed')return setPlaybackOption('speed',v);if(e.target.name==='playbackHold')return setPlaybackOption('holdMs',v);if(e.target.name==='playbackMode')return setPlaybackOption('mode',v);if(['videoSpeed','videoHold','videoMode'].includes(e.target.name)){ui.videoDraft={...(ui.videoDraft||playbackOptions()),[e.target.name==='videoSpeed'?'speed':e.target.name==='videoHold'?'holdMs':'mode']:e.target.name==='videoMode'?v:Number(v)};return}edit(e.target.name,v)}});
+app.addEventListener('change',e=>{if(e.target?.dataset?.sensorFormat){const prefix=e.target.dataset.sensorFormat,preset=M.SENSOR_FORMATS.find(f=>f[0]===e.target.value);if(preset?.[2]){app.querySelector('#'+prefix+'Width').value=preset[2];app.querySelector('#'+prefix+'Height').value=preset[3]}return}if(e.target?.id==='librarySort'){ui.librarySort=e.target.value;render();return}if(e.target.name){const v=e.target.type==='checkbox'?e.target.checked:e.target.value;if(e.target.name==='playbackSpeed')return setPlaybackOption('speed',v);if(e.target.name==='playbackHold')return setPlaybackOption('holdMs',v);if(e.target.name==='playbackMode')return setPlaybackOption('mode',v);if(['videoSpeed','videoHold','videoMode'].includes(e.target.name)){ui.videoDraft={...(ui.videoDraft||playbackOptions()),[e.target.name==='videoSpeed'?'speed':e.target.name==='videoHold'?'holdMs':'mode']:e.target.name==='videoMode'?v:Number(v)};return}edit(e.target.name,v)}});
 app.addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.matches('.project-tile[data-id]'))openProject(e.target.dataset.id);else if(e.key==='Enter'&&e.target.id==='entityEditName'){e.preventDefault();saveEntityDialog()}});
 window.addEventListener('keydown',e=>{if(ui.page==='manual'){if(e.key==='Escape'){ui.page=ui.manualReturn||'workspace';render()}return}if(ui.dialog&&e.key==='Escape'){ui.dialog=null;ui.previewDraft=undefined;render();return}if(ui.dialog)return;if(e.target.closest?.('input,select,textarea'))return;if(e.code==='Space'&&scene()){e.preventDefault();togglePlayback();return}if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();e.shiftKey?redoAction():undoAction()}else if(['Delete','Backspace'].includes(e.key)&&ui.selection&&ui.selection.type!=='background'){e.preventDefault();removeSelection()}else if(e.key==='Escape'){ui.selection=null;ui.showInspector=false;ui.tool='select';render()}else if(e.key==='ArrowRight'&&scene()){const i=scene().beats.findIndex(b=>b.id===ui.beatId);chooseBeat(scene().beats[Math.min(scene().beats.length-1,i+1)].id)}else if(e.key==='ArrowLeft'&&scene()){const i=scene().beats.findIndex(b=>b.id===ui.beatId);chooseBeat(scene().beats[Math.max(0,i-1)].id)}});
 fileInput.addEventListener('change',async()=>{if(fileInput.files[0])await importBackground(fileInput.files[0]);fileInput.value=''});
@@ -937,7 +1080,8 @@ previewInput?.addEventListener('change',async()=>{
   render();
  }catch(error){notice('Preview image failed: '+error.message)}
 });
-window.addEventListener('resize',()=>{if(canvas?.isConnected){fitView();paint()}});
+let previousCompact=compactPanelMode();
+window.addEventListener('resize',()=>{const compact=compactPanelMode();if(compact!==previousCompact){previousCompact=compact;render()}if(canvas?.isConnected){fitView();paint()}});
 function finishSplash(){const splash=document.getElementById('startupSplash');if(!splash)return;setTimeout(()=>{splash.classList.add('dismissed');splash.addEventListener('transitionend',()=>splash.remove(),{once:true})},Math.max(0,1750-(performance.now()-splashStarted)))}
 (async()=>{try{const layout=JSON.parse(localStorage.getItem('Block4Film-v11-layout')||'null');if(layout&&typeof layout==='object')ui.layout={...ui.layout,...layout}}catch{}const saved=await loadDB();if(saved?.projects&&Array.isArray(saved.projects)){const migrated=[];for(const p of saved.projects){try{migrated.push(M.migrate(p))}catch(e){console.error('Project migration failed; original saved copy preserved.',e)}}if(migrated.length===saved.projects.length){database={version:2,projects:migrated};await writeDB()}else{database={version:2,projects:[M.createProject('Demo Film')]};notice('Could not upgrade all projects. Export your old backups.')}}else{database.projects=[M.createProject('Demo Film')];await writeDB()}render();finishSplash();for(const p of database.projects)queuePreviews(p)})();
 })();

@@ -58,7 +58,7 @@ jobs:
       - name: Publish accepted Windows build without replacing existing releases
         env:
           GH_TOKEN: ${{ github.token }}
-          WINDOWS_TAG: v1.4.1
+          WINDOWS_TAG: v1.5.0
           STABLE_RELEASE: ${{ inputs.stable }}
         run: |
           set -euo pipefail
@@ -72,7 +72,7 @@ jobs:
             if [ "$STABLE_RELEASE" != "true" ]; then flags+=(--prerelease); fi
             gh release create "$WINDOWS_TAG" release-assets/*.exe "${flags[@]}" \
               --target "$GITHUB_SHA" \
-              --title "Block4Film 1.4.1 - Scene Planning Release" \
-              --notes "Block4Film 1.4.1: preserve imported floor-plan aspect ratios with adjustable scale, wall/window menu, direct resize handles for furniture/walls/windows/doors, adjustable lens-constrained camera cone reach, modular lights with Standard/Softbox/Spotlight and Kelvin/Color modes, and cropped Block4Film Android launcher icon. Windows release; Android APK remains test-signed until a persistent signing key is configured. Existing stable 1.3.0 remains available."
+              --title "Block4Film 1.5.0 - Tablet Feedback Update" \
+              --notes "Block4Film 1.5.0 adds movement continuity, directional rotation, visibility fades, looping, grouped tablet Properties, project camera defaults, actor/camera libraries, columns and reliable project sharing. Includes earlier scene tools: preserve imported floor-plan aspect ratios with adjustable scale, wall/window menu, direct resize handles for furniture/walls/windows/doors, adjustable lens-constrained camera cone reach, modular lights with Standard/Softbox/Spotlight and Kelvin/Color modes, and cropped Block4Film Android launcher icon. Windows release; Android APK remains test-signed until a persistent signing key is configured. Existing stable 1.3.0 remains available."
           fi
           gh release view "$WINDOWS_TAG" --json assets --jq '.assets[].name' | grep -qE '\.exe$'

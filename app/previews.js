@@ -5,7 +5,7 @@
 const W=1100,H=700,WIDTH=560,HEIGHT=350,rad=d=>d*Math.PI/180;
 function signature(project,scene){
  const location=project?.sets?.find(s=>s.id===scene?.setId);
- const source=JSON.stringify({renderer:2,beat:scene?.beats?.[0]||null,actors:scene?.actors||[],cameras:scene?.cameras||[],equipment:scene?.equipment||[],set:location||null});
+ const source=JSON.stringify({renderer:3,beat:scene?.beats?.[0]||null,actors:scene?.actors||[],cameras:scene?.cameras||[],equipment:scene?.equipment||[],set:location||null});
  let h=2166136261;for(let i=0;i<source.length;i++){h^=source.charCodeAt(i);h=Math.imul(h,16777619)}
  return (h>>>0).toString(36)+':'+source.length;
 }
@@ -44,7 +44,7 @@ function object(g,o){
  }else{
   const width=Math.max(20,o.w||110),height=Math.max(20,o.h||80);
   g.fillStyle='#45485166';g.strokeStyle='#777B85';g.lineWidth=2;
-  g.beginPath();g.roundRect(-width/2,-height/2,width,height,7);g.fill();g.stroke();
+  g.beginPath();if(o.type==='column'&&o.shape!=='square')g.arc(0,0,width/2,0,Math.PI*2);else g.roundRect(-width/2,-height/2,width,height,o.type==='column'?1:7);g.fill();g.stroke();
   fillText(g,o.name||'Furniture',0,0,13,'#9FA3AD',false);
  }
  g.restore();

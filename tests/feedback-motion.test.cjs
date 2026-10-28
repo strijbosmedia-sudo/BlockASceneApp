@@ -1,0 +1,42 @@
+const assert=require('node:assert/strict'),M=require('../app/model.js'),P=require('../app/playback.js'),harness=require('./feedback-harness.cjs');
+const near=(a,b)=>assert.ok(Math.abs(a-b)<.00001,`${a} != ${b}`);
+for(const direction of ['left','right','shortest'])near(M.normalizeAngle(P.mixAngle(350,10,1,direction)),10);
+near(M.normalizeAngle(P.mixAngle(350,10,.5,'left')),180);
+near(M.normalizeAngle(P.mixAngle(350,10,.5,'right')),0);
+near(M.normalizeAngle(P.mixAngle(350,10,.5,'shortest')),0);
+const turn={x:50,y:70,rotation:350,rotationDirection:'left',visible:true,motion:{kind:'pan',endX:50,endY:70,endRotation:10}};
+const mid=P.animateCameraPosition(turn,.5);near(mid.x,50);near(mid.y,70);near(M.normalizeAngle(mid.rotation),180);
+const h=harness(),actor=h.scene.actors[0],cam=h.scene.cameras[0];
+for(const [type,id,key] of [['actor',actor.id,'positions'],['camera',cam.id,'cameras']]){
+ const first=h.scene.beats[0][key][id],second=h.scene.beats[1][key][id];
+ first.motion={kind:type==='actor'?'walk':'track',endX:300,endY:300,endRotation:27,keys:[{id:'middle',t:.5,x:240,y:210,rotation:14}]};
+ const start={x:first.x,y:first.y},keys=JSON.stringify(first.motion.keys),third=JSON.stringify(h.scene.beats[2]);
+ h.ui.beatId=h.scene.beats[1].id;h.ui.selection={type,id};
+ h.edit('x','555');h.edit('y','444');
+ assert.equal(first.motion.endX,555);assert.equal(first.motion.endY,444);
+ assert.equal(first.motion.endRotation,27);assert.equal(JSON.stringify(first.motion.keys),keys);
+ assert.deepEqual({x:first.x,y:first.y},start);assert.equal(JSON.stringify(h.scene.beats[2]),third);
+ first.motion.kind=type==='actor'?'turn':'pan';const end=first.motion.endX;
+ h.edit('x','575');assert.equal(first.motion.endX,end,'rotation-only previous beat never position-links');
+ second.motion=null;
+}
+// Canvas dragging uses the same one-step synchronization and leaves current destinations anchored.
+h.scene.actors=[actor];h.scene.cameras=[];h.scene.equipment=[];
+const first=h.scene.beats[0].positions[actor.id],second=h.scene.beats[1].positions[actor.id];
+first.motion={kind:'walk',endX:500,endY:500,endRotation:70,keys:[{id:'keep',t:.5,x:400,y:300,rotation:20}]};
+Object.assign(second,{x:500,y:500,motion:{kind:'walk',endX:800,endY:600,endRotation:80}});
+h.ui.selection={type:'actor',id:actor.id};h.ui.beatId=h.scene.beats[1].id;h.ui.tool='select';h.ui.view={scale:1,x:0,y:0};
+const captures=new Set(),canvas={isConnected:true,getBoundingClientRect:()=>({left:0,top:0}),setPointerCapture:id=>captures.add(id),hasPointerCapture:id=>captures.has(id),releasePointerCapture:id=>captures.delete(id),classList:{add(){},remove(){}}};
+h.setCanvas(canvas);const event=(x,y)=>({clientX:x,clientY:y,pointerId:1,pointerType:'pen',button:0,preventDefault(){},type:'pointerup'});
+h.onDown(event(500,500));h.onMove(event(540,530));h.onUp(event(540,530));
+assert.equal(second.x,540);assert.equal(second.y,530);assert.equal(first.motion.endX,540);assert.equal(first.motion.endY,530);
+assert.equal(second.motion.endX,800);assert.equal(first.motion.keys[0].id,'keep');
+const beats=[{id:'one',holdMs:500,positions:{a:{x:10,y:20,rotation:0,visible:true}},cameras:{}},{id:'two',holdMs:500,positions:{a:{x:90,y:60,rotation:90,visible:false}},cameras:{}}];
+const config={loop:'all',mode:'move'},cycle=P.duration(beats,config)+950;
+assert.equal(P.loopFrameAt(beats,cycle+100,config).index,0);
+const seam=P.loopFrameAt(beats,P.duration(beats,config)+475,config);
+assert.equal(seam.phase,'transition');assert.equal(seam.done,false);assert.equal(seam.states.positions.a.x,10);near(seam.states.positions.a.alpha,.5);
+const one=P.loopFrameAt(beats,800,{loop:'one'},1);
+assert.equal(one.index,1);assert.equal(one.loopReset,true);assert.equal(one.done,false);
+assert.equal(P.frameAt(beats,100000,{loop:'all'}).done,true,'exports remain finite regardless of preview loop');
+console.log('Feedback motion: direct switching, one-step continuity, pen dragging, rotation direction and loops passed');

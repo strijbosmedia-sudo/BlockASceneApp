@@ -1,12 +1,12 @@
-# Block4Film 1.4.1 candidate · strijbos.media
+# Block4Film 1.5.0 beta · strijbos.media
 
 **Block a scene, see the whole picture.** A portable, offline-first floor-plan and blocking editor with a stable Windows baseline and Android tablet test builds.
 
 ## Current status
 
-Windows 1.3.0 remains the stable baseline. The 1.4.1 branch is a release candidate pending Windows/tablet acceptance. Android CI APKs are debug-signed tests; the separate signed-release workflow requires a persistent user-controlled keystore and verifies its certificate. macOS packages are unsigned tests; iOS packages are Simulator-only. No stable release is published automatically on merge.
+Version 1.4.1 is the user-accepted application baseline. Version 1.5.0 implements the testing feedback and awaits physical Windows/tablet acceptance. Android CI APKs are debug-signed tests; the separate signed-release workflow requires a persistent user-controlled keystore and verifies its certificate. macOS packages are unsigned tests; iOS packages are Simulator-only. No stable release is published automatically on merge.
 
-See [1.4.1 changes and acceptance checks](docs/V140-SCENE-TOOLS.md) and [Android signing setup](docs/ANDROID_SIGNING.md).
+See [1.5.0 changes and acceptance checks](docs/V150-TESTING-FEEDBACK.md) and [Android signing setup](docs/ANDROID_SIGNING.md).
 
 ## What is implemented
 
