@@ -5,11 +5,23 @@ const DEFAULTS=Object.freeze({speed:1,holdMs:2500,transitionMs:950,mode:'move'})
 const clamp=(v,a=0,b=1)=>Math.min(b,Math.max(a,v));
 const smooth=t=>{t=clamp(t);return t*t*(3-2*t)};
 const clone=v=>JSON.parse(JSON.stringify(v));
-function settings(value){return {speed:[.5,.75,1,1.5,2].includes(Number(value?.speed))?Number(value.speed):1,holdMs:[2000,2500,3000,5000].includes(Number(value?.holdMs))?Number(value.holdMs):2500,transitionMs:950,mode:['move','fade','ghost'].includes(value?.mode)?value.mode:'move'}}
+function settings(value){return {speed:[.5,.75,1,1.5,2].includes(Number(value?.speed))?Number(value.speed):1,holdMs:[2000,2500,3000,5000].includes(Number(value?.holdMs))?Number(value.holdMs):2500,transitionMs:950,mode:['move','fade','ghost'].includes(value?.mode)?value.mode:'move',loop:['one','all'].includes(value?.loop)?value.loop:'off'}}
 function holdForBeat(beat,p){const ms=Number(beat?.holdMs);return Number.isFinite(ms)&&ms>=500&&ms<=30000?ms:p.holdMs}
 function duration(beatsOrCount,config){const p=settings(config),beats=Array.isArray(beatsOrCount)?beatsOrCount:null,count=beats?beats.length:Number(beatsOrCount)||0;return count?((beats?beats.reduce((n,b)=>n+holdForBeat(b,p),0):count*p.holdMs)+Math.max(0,count-1)*p.transitionMs)/p.speed:0}
-function mixAngle(a,b,t){const delta=((Number(b||0)-Number(a||0)+540)%360)-180;return Number(a||0)+delta*t}
-function mixState(a,b,t){if(!a&&!b)return null;if(!a)return {...clone(b),alpha:t};if(!b)return {...clone(a),alpha:1-t};const r={...clone(t<.5?a:b)};for(const key of ['x','y','lens','sensor'])if(Number.isFinite(a[key])&&Number.isFinite(b[key]))r[key]=a[key]+(b[key]-a[key])*t;r.rotation=mixAngle(a.rotation,b.rotation,t);r.alpha=(a.visible===false?0:1)*(1-t)+(b.visible===false?0:1)*t;r.visible=r.alpha>0.001;return r}
+function mixAngle(a,b,t,direction='shortest'){
+ const start=Number(a)||0,end=Number(b)||0,clockwise=((end-start)%360+360)%360;
+ const delta=direction==='right'?clockwise:direction==='left'?(clockwise===0?0:clockwise-360):((clockwise+180)%360)-180;
+ return start+delta*t;
+}
+function mixState(a,b,t){
+ const av=!!a&&a.visible!==false,bv=!!b&&b.visible!==false;
+ if(!a&&!b)return null;
+ if(!av||!bv){const r=clone(av?a:bv?b:a||b);r.alpha=av?1-t:bv?t:0;r.visible=r.alpha>0.001;return r}
+ const r=clone(t<.5?a:b);
+ for(const key of ['x','y','lens','sensor','sensorHeight','coneRange'])if(Number.isFinite(a[key])&&Number.isFinite(b[key]))r[key]=a[key]+(b[key]-a[key])*t;
+ r.rotation=mixAngle(a.rotation,b.rotation,t,a.rotationDirection||a.motion?.rotationDirection);
+ r.alpha=1;r.visible=true;return r;
+}
 function mixMap(from={},to={},t){const result={};for(const id of new Set([...Object.keys(from),...Object.keys(to)])){const v=mixState(from[id],to[id],t);if(v)result[id]=v}return result}
 function curveCoord(a,b,c,d,t){
  // Catmull–Rom through keyframe positions, with continuity at each keyframe.
@@ -36,7 +48,7 @@ function animateCameraPosition(camera,progress){
   r.x=curveCoord(prev.x,a.x,b.x,next.x,u);
   r.y=curveCoord(prev.y,a.y,b.y,next.y,u);
  }else{r.x=a.x+(b.x-a.x)*u;r.y=a.y+(b.y-a.y)*u}
- r.rotation=mixAngle(a.rotation,b.rotation,u);
+ r.rotation=mixAngle(a.rotation,b.rotation,u,camera.rotationDirection||m.rotationDirection);
  return r;
 }
 function beatStates(beat,progress=0,animateCamera=false){const cameras=clone(beat.cameras||{}),positions=clone(beat.positions||{});if(animateCamera){for(const id of Object.keys(cameras))cameras[id]=animateCameraPosition(cameras[id],progress);for(const id of Object.keys(positions))positions[id]=animateCameraPosition(positions[id],progress)}return {positions,cameras,equipment:clone(beat.equipment||{})}}
@@ -51,5 +63,22 @@ function frameAt(beats,elapsedMs,config,startIndex=0){const p=settings(config),s
  }
  return {done:true,index:beats.length-1,phase:'hold',progress:1,states:beatStates(beats[beats.length-1],1,p.mode==='move'),fromStates:null,toStates:null};
 }
-return {DEFAULTS,settings,holdForBeat,duration,frameAt,mixAngle,mixState,interpolate,beatStates,smooth,motionPoints,animateCameraPosition};
+/** Looping belongs to preview only. frameAt/duration stay bounded for video export. */
+function loopFrameAt(beats,elapsedMs,config,startIndex=0){
+ const p=settings(config);
+ if(!beats.length||p.loop==='off')return frameAt(beats,elapsedMs,p,startIndex);
+ const index=Math.max(0,Math.min(beats.length-1,startIndex|0));
+ const sequence=p.loop==='one'?[beats[index]]:beats;
+ const body=duration(sequence,p),seam=p.transitionMs/p.speed,cycle=body+seam,time=Math.max(0,elapsedMs)%cycle;
+ let frame;
+ if(time<body){frame=frameAt(sequence,time,p,0);frame.done=false}
+ else{
+  const from=beatStates(sequence[sequence.length-1],1,p.mode==='move'),to=beatStates(sequence[0],0,p.mode==='move'),t=smooth((time-body)/seam);
+  // Repeating one movement resets with a fade, rather than inventing a return move.
+  frame={done:false,index:0,phase:'transition',progress:t,states:p.loop==='one'||p.mode!=='move'?null:interpolate(from,to,t),fromStates:from,toStates:to,loopReset:p.loop==='one'};
+ }
+ if(p.loop==='one')frame.index=index;
+ return frame;
+}
+return {DEFAULTS,settings,holdForBeat,duration,frameAt,loopFrameAt,mixAngle,mixState,interpolate,beatStates,smooth,motionPoints,animateCameraPosition};
 });

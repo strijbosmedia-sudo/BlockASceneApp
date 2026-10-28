@@ -10,7 +10,7 @@ const normalizeAngle=v=>((Number(v)||0)%360+360)%360;
 const label=n=>{let s='';do{s=String.fromCharCode(65+(n-1)%26)+s;n=Math.floor((n-1)/26)}while(n>0);return s};
 const colorKey=v=>String(v||'').toUpperCase();
 function uniqueColor(project,preferred){const used=new Set(Object.values(project.identities||{}).map(o=>colorKey(o.color)));
- if(validColor(preferred)&&!used.has(colorKey(preferred)))return preferred;
+ if(validColor(preferred))return preferred;
  for(const color of PRESET)if(!used.has(colorKey(color)))return color;
  // Stable extra colors; never exactly repeat a color, though distant objects may resemble each other.
  for(let i=0;i<4000;i++){const hue=Math.round((i*137.507764+12)%360),sat=70+(i%3)*7,light=50+(i%4)*3;const c=hslToHex(hue,sat,light);if(!used.has(colorKey(c)))return c}
@@ -109,7 +109,7 @@ function setIdentityNumber(project,scene,type,id,number){
 function addIdentity(project,scene,type,beat,point,shape){const id=uid(),entry={id};
  if(type==='actor'||type==='camera')entry.number=nextAvailableNumber(scene,type);
  applyIdentity(project,entry,type);if(type==='actor'){scene.actors.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.positions[id]=defaultActorState(point.x,point.y)}}else if(type==='camera'){scene.cameras.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.cameras[id]=defaultCameraState(point.x,point.y)}}else{entry.name=shape==='custom'?'Custom Object':shape[0].toUpperCase()+shape.slice(1);entry.type=shape;entry.color='#C4C7CD';if(shape==='light'){entry.lightMode='kelvin';entry.lightKelvin=5600;entry.lightColor='#FFFFFF'}scene.equipment.push(entry);let active=false;for(const b of scene.beats){if(b===beat)active=true;if(active)b.equipment[id]=defaultEquipmentState(point.x,point.y)}}return entry}
-function recolor(project,id,newColor){if(!validColor(newColor))return 'Invalid HEX color';const info=project.identities?.[id];if(info&&Object.entries(project.identities).some(([key,v])=>key!==id&&colorKey(v.color)===colorKey(newColor)))return 'Color already used. Pick another color.';if(info)info.color=newColor;for(const scene of project.scenes)for(const entity of [...scene.actors,...scene.cameras,...scene.equipment])if(entity.id===id)entity.color=newColor;return null}
+function recolor(project,id,newColor){if(!validColor(newColor))return 'Invalid HEX color';const info=project.identities?.[id];if(info)info.color=newColor;for(const scene of project.scenes)for(const entity of [...scene.actors,...scene.cameras,...scene.equipment])if(entity.id===id)entity.color=newColor;return null}
 /** Set visibility on any beat, including beats before an object was introduced.
  * A missing state is copied from the nearest beat that contains this identity.
  * This never mutates a different beat or the identity itself. */
@@ -134,5 +134,29 @@ function setBeatVisibility(scene,type,id,beatId,visible){
 }
 function setOutline(project,id,outline){if(!['white','black'].includes(outline))return false;const item=project.identities?.[id];if(item)item.outline=outline;for(const s of project.scenes)for(const v of [...s.actors,...s.cameras])if(v.id===id)v.outline=outline;return true}
 function rename(project,id,newName){const info=project.identities?.[id];if(info)info.name=newName;for(const scene of project.scenes)for(const entity of [...scene.actors,...scene.cameras,...scene.equipment])if(entity.id===id)entity.name=newName}
-return {VERSION,PRESET,clone,uid,label,normalizeAngle,register,applyIdentity,uniqueColor,migrate,createProject,nextBeat,finalBeatState,addIdentity,nextAvailableNumber,numberAvailable,setIdentityNumber,recolor,rename,setOutline,setBeatVisibility,backgroundFit,kelvinToHex,defaultActorState,defaultCameraState,defaultEquipmentState};
+const rotationOnly=kind=>['turn','pan'].includes(kind);
+const positionalMotion=motion=>!!motion&&['walk','push','slide','track'].includes(motion.kind);
+const visiblePair=(a,b)=>!!a&&!!b&&a.visible!==false&&b.visible!==false;
+function setMotionKind(state,kind){
+ if(!state||!['static','turn','pan','walk','push','slide','track'].includes(kind))return false;
+ if(kind==='static'){state.motion=null;return true}
+ const old=state.motion,turn=rotationOnly(kind),oldTurn=rotationOnly(old?.kind),angle=(state.rotation||0)*Math.PI/180;
+ const reusePosition=positionalMotion(old)&&!turn;
+ state.motion={kind,pathType:reusePosition?old.pathType||'linear':'linear',
+  keys:turn&&oldTurn?clone(old.keys||[]):reusePosition?clone(old.keys||[]):[],
+  endX:turn?state.x:reusePosition?old.endX:state.x+145*Math.cos(angle),
+  endY:turn?state.y:reusePosition?old.endY:state.y+145*Math.sin(angle),
+  endRotation:old?.endRotation??state.rotation};
+ return true;
+}
+function syncPreviousEndpoint(scene,type,id,beatId){
+ const key=type==='actor'?'positions':type==='camera'?'cameras':null;
+ if(!key)return false;
+ const i=scene.beats.findIndex(b=>b.id===beatId);if(i<1)return false;
+ const current=scene.beats[i][key]?.[id],previous=scene.beats[i-1][key]?.[id];
+ if(!current||!positionalMotion(previous?.motion)||!Number.isFinite(current.x)||!Number.isFinite(current.y))return false;
+ previous.motion.endX=current.x;previous.motion.endY=current.y;
+ return true;
+}
+return {VERSION,PRESET,clone,uid,label,normalizeAngle,register,applyIdentity,uniqueColor,migrate,createProject,nextBeat,finalBeatState,addIdentity,nextAvailableNumber,numberAvailable,setIdentityNumber,recolor,rename,setOutline,setBeatVisibility,backgroundFit,kelvinToHex,defaultActorState,defaultCameraState,defaultEquipmentState,rotationOnly,positionalMotion,visiblePair,setMotionKind,syncPreviousEndpoint};
 });
