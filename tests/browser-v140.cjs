@@ -21,9 +21,13 @@ const {chromium}=require('playwright'),sharp=require('sharp'),M=require('../app/
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  let browser,page;
  try{
-  browser=await chromium.launch({headless:true});
+  browser=await chromium.launch({headless:true,...(process.env.B4_BROWSER_CHANNEL?{channel:process.env.B4_BROWSER_CHANNEL}:{})});
   const context=await browser.newContext({viewport:{width:1280,height:900},hasTouch:true,acceptDownloads:true});
   page=await context.newPage();const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  async function reveal(selector){
+   const groups=await page.locator(selector).evaluate(el=>{const result=[];for(let p=el.parentElement;p;p=p.parentElement)if(p.matches('details[data-property-group]'))result.unshift(p.dataset.propertyGroup);return result});
+   for(const key of groups){const group=page.locator('details[data-property-group="'+key+'"]');if(!(await group.evaluate(el=>el.open)))await group.locator(':scope > summary').click()}
+  }
   await page.goto('http://127.0.0.1:'+server.address().port+'/app/index.html');
   await page.locator('#startupSplash').waitFor({state:'hidden'});
   // Workspace menu: internal taps keep it open; an outside button still receives its click.
@@ -54,7 +58,7 @@ const {chromium}=require('playwright'),sharp=require('sharp'),M=require('../app/
   await page.locator('.scene-card[data-id="'+scene.id+'"]').click();
   await page.locator('#stage').waitFor();
   await page.locator('[data-action="toggle-structure"]').click();
-  assert.equal(await page.locator('.equipment-grid button').count(),2);
+  assert.equal(await page.locator('.equipment-grid button').count(),3);
   await page.locator('[data-action="place-structure"][data-shape="window"]').click();
   await page.locator('#stage').click({position:{x:450,y:350}});
   await page.locator('input[name="setLength"]').fill('244');
@@ -62,6 +66,7 @@ const {chromium}=require('playwright'),sharp=require('sharp'),M=require('../app/
   await page.waitForFunction(()=>document.querySelector('input[name="setLength"]')?.value==='244');
   await page.locator('[data-action="tool"][data-tool="furniture"]').click();
   await page.locator('#stage').click({position:{x:470,y:430}});
+  await reveal('input[name="rotation"]');
   const x=await page.locator('input[name="x"]').inputValue(),y=await page.locator('input[name="y"]').inputValue();
   for(const [name,value] of [['rotation','45'],['setWidth','300'],['setHeight','120']]){
    await page.locator('input[name="'+name+'"]').fill(value);
@@ -140,8 +145,10 @@ const {chromium}=require('playwright'),sharp=require('sharp'),M=require('../app/
    const visibilityBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
    previous=await page.locator('.inspector .inspect-body').elementHandle();
    await visibility.setChecked(!(await visibility.isChecked()));
-   await waitForPropertiesRefresh(previous);
+   assert.equal(await previous.evaluate(el=>el.isConnected),true,'visibility editing keeps the existing scroller mounted');
+   await previous.dispose();
    assert.ok(Math.abs((await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop))-visibilityBefore)<=1,'Checkbox settings retain Properties scroll');
+   await reveal('input[name="itemColor"]');
    await page.locator('.inspector .inspect-body').evaluate(el=>{el.scrollTop=150});
    const colorBefore=await page.locator('.inspector .inspect-body').evaluate(el=>el.scrollTop);
    assert.ok(colorBefore>0);
