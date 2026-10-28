@@ -18,7 +18,11 @@ async function main(){
  const map={mdpi:48,hdpi:72,xhdpi:96,xxhdpi:144,xxxhdpi:192};
  for(const [density,size] of Object.entries(map)){
   const folder=path.join(res,'mipmap-'+density);fs.mkdirSync(folder,{recursive:true});
-  const legacy=await pixels(size,false),foreground=await pixels(size*108/48,true);
+  const legacy=await pixels(size,false),layerSize=Math.round(size*108/48);
+  // Keep the cropped mark inside Android's central 66dp safe area on a 108dp layer.
+  const mark=await pixels(Math.round(size*66/48),true);
+  const foreground=await sharp({create:{width:layerSize,height:layerSize,channels:4,background:{r:0,g:0,b:0,alpha:0}}})
+   .composite([{input:mark,gravity:'centre'}]).png().toBuffer();
   fs.writeFileSync(path.join(folder,'ic_launcher.png'),legacy);
   fs.writeFileSync(path.join(folder,'ic_launcher_round.png'),legacy);
   fs.writeFileSync(path.join(folder,'ic_launcher_foreground.png'),foreground);

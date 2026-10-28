@@ -1,19 +1,23 @@
 name: Publish Block4Film Windows portable release
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/release.yml'
-      - 'app/**'
-      - 'desktop/**'
-      - 'package.json'
+    inputs:
+      publish:
+        description: 'Publish after Windows acceptance testing'
+        type: boolean
+        default: false
+      stable:
+        description: 'Mark accepted build as stable (otherwise prerelease)'
+        type: boolean
+        default: false
 permissions:
   contents: write
 jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 35
+    env:
+      SIGN_WINDOWS: ${{ secrets.WIN_CSC_LINK != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -36,8 +40,6 @@ jobs:
           $signature = Get-AuthenticodeSignature $exe.FullName
           if ($signature.Status -ne 'Valid') { throw "Code signing failed: $($signature.Status)" }
           Write-Host "Signed by $($signature.SignerCertificate.Subject)"
-        env:
-          SIGN_WINDOWS: ${{ secrets.WIN_CSC_LINK != '' }}
       - uses: actions/upload-artifact@v4
         with:
           name: windows-portable
@@ -45,6 +47,7 @@ jobs:
           if-no-files-found: error
   publish:
     needs: windows
+    if: ${{ inputs.publish }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -52,19 +55,24 @@ jobs:
         with:
           name: windows-portable
           path: release-assets
-      - name: Publish Windows release and retire cross-platform beta
+      - name: Publish accepted Windows build without replacing existing releases
         env:
           GH_TOKEN: ${{ github.token }}
-          WINDOWS_TAG: v1.4.0
+          WINDOWS_TAG: v1.4.1
+          STABLE_RELEASE: ${{ inputs.stable }}
         run: |
           set -euo pipefail
+          if [ "$STABLE_RELEASE" != "true" ]; then WINDOWS_TAG="$WINDOWS_TAG-rc.1"; fi
           ls -lh release-assets/*.exe
           if gh release view "$WINDOWS_TAG" > /dev/null 2>&1; then
-            gh release upload "$WINDOWS_TAG" release-assets/*.exe --clobber
+            echo "::error::Release already exists; refusing to replace published downloads"
+            exit 1
           else
-            gh release create "$WINDOWS_TAG" release-assets/*.exe \
+            flags=()
+            if [ "$STABLE_RELEASE" != "true" ]; then flags+=(--prerelease); fi
+            gh release create "$WINDOWS_TAG" release-assets/*.exe "${flags[@]}" \
               --target "$GITHUB_SHA" \
-              --title "Block4Film 1.4.0 - Scene Planning Release" \
-              --notes "Block4Film 1.4.0: preserve imported floor-plan aspect ratios with adjustable scale, wall/window menu, direct resize handles for furniture/walls/windows/doors, adjustable lens-constrained camera cone reach, modular lights with Standard/Softbox/Spotlight and Kelvin/Color modes, and cropped Block4Film Android launcher icon. Windows release; Android APK remains test-signed until a persistent signing key is configured. Existing stable 1.3.0 remains available."
+              --title "Block4Film 1.4.1 - Scene Planning Release" \
+              --notes "Block4Film 1.4.1: preserve imported floor-plan aspect ratios with adjustable scale, wall/window menu, direct resize handles for furniture/walls/windows/doors, adjustable lens-constrained camera cone reach, modular lights with Standard/Softbox/Spotlight and Kelvin/Color modes, and cropped Block4Film Android launcher icon. Windows release; Android APK remains test-signed until a persistent signing key is configured. Existing stable 1.3.0 remains available."
           fi
           gh release view "$WINDOWS_TAG" --json assets --jq '.assets[].name' | grep -qE '\.exe$'

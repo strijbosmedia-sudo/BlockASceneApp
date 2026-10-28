@@ -1,4 +1,4 @@
-# Block4Film 1.4.0 • Scene planning tools
+# Block4Film 1.4.0 scene tools / 1.4.1 validation candidate
 
 ## What changed
 - Imported floor plans now scale **proportionally** to fit inside the 1100 × 700 scene at 100%. Portrait, square and landscape images keep their original width-to-height ratio. The background is centered.
@@ -15,8 +15,18 @@
 3. Resize Furniture from its corner, then rotate it and resize again.
 4. Select a camera and drag the tip of its view cone. Change lens/sensor and verify the cone's angle changes while the reach stays intact.
 5. Place a Light, change Standard to Softbox 120 cm, then to Spotlight. Adjust Kelvin, switch to Color, and save/reopen.
-6. Reinstall Android on the tablet and check the launcher icon. Android launchers can cache old artwork; remove the old home-screen shortcut if needed.
+6. Export a project backup before changing Android installations. Install the candidate using a compatible signing identity and check the launcher icon. Android launchers can cache old artwork; remove the old home-screen shortcut if needed.
 7. Export a .blockascene backup and reimport; confirm floor-plan scale, furniture and wall dimensions, camera cone reach, and light settings all persist.
 
 ## Stability and signing
-The Windows desktop build is version 1.4.0, with the previous stable v1.3.0 retained. Android is delivered as **Block4Film-1.4.0-Android-Tablet-Test.apk**, not `app-debug.apk`. The file is still a developer **debug-signed** APK until a persistent Android release signing key is available. Renaming the APK does not upgrade its signing status. Android users may need to uninstall older debug APKs if GitHub's build signature changes; export your project before doing so. Only call the Android package production-stable after persistent signing and real-tablet QA.
+Windows publication is manual and defaults to a prerelease. Merging does not publish a stable build or replace existing downloads. Run device acceptance before choosing stable publication.
+
+The Windows desktop build is version 1.4.0, with the previous stable v1.3.0 retained. Android is delivered as **Block4Film-1.4.1-Android-Tablet-Test.apk**, not `app-debug.apk`. The file is still a developer **debug-signed** APK until a persistent Android release signing key is available. Renaming the APK does not upgrade its signing status. Android users may need to uninstall older debug APKs if GitHub's build signature changes; export your project before doing so. Only call the Android package production-stable after persistent signing and real-tablet QA.
+
+## Validation additions
+- Thumbnail rendering uses the model's background-fit helper and matches window, light modifier/color and camera-reach settings.
+- Existing diagonal structural objects retain their world endpoints during migration. Furniture dimensions, project IDs, schema v2, custom previews and Windows storage identity are preserved.
+- Replacement background images start at 100% fitted scale.
+- Chromium checks exercise actual import, dialog controls, set-object sizing, backup export, reopen and tablet layout. They supplement physical pen/tablet testing.
+- Android native projects receive versionName 1.4.1 and versionCode 10401 after regeneration. Adaptive icons include transparent padding around the cropped mark.
+- A manual signed-release candidate workflow is prepared; see [Android signing setup](ANDROID_SIGNING.md). Its execution and real-device upgrade testing remain required before Android is stable.

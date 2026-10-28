@@ -325,10 +325,12 @@ function modal(){
  return '';
 }
 
-let lastRenderedDialogKey='';
+let lastRenderedDialogKey='',lastRenderedInspectorKey='';
 function render(){
  ensureActive();
  const key=ui.dialog?ui.dialog.kind+':'+(ui.dialog.id||''):'';
+ const inspectorKey=ui.page==='editor'&&ui.showInspector?JSON.stringify([ui.projectId,ui.sceneId,ui.selection?.type||'',ui.selection?.id||'']):'';
+ const inspectorScroll=inspectorKey&&inspectorKey===lastRenderedInspectorKey?(app.querySelector?.('.inspector .inspect-body')?.scrollTop||0):0;
  // A background rerender must never discard unsaved text or the user's caret position.
  const preserved=new Map(),active=document.activeElement;
  let focusKey=null,caret=null;
@@ -356,6 +358,9 @@ function render(){
    else if(!focused&&target.select)target.select();
   }
  }
+ const inspectorBody=app.querySelector?.('.inspector .inspect-body');
+ if(inspectorBody)inspectorBody.scrollTop=inspectorScroll;
+ lastRenderedInspectorKey=inspectorKey;
  lastRenderedDialogKey=key;
 }
 function cached(src){if(!src)return null;let record=images.get(src);if(!record){record={ready:false,img:new Image()};images.set(src,record);record.img.onload=()=>{record.ready=true;paint()};record.img.onerror=()=>console.warn('Image could not be loaded');record.img.src=src}return record.ready?record.img:null}
@@ -785,7 +790,7 @@ async function importProject(file){
   notice('Import failed: '+(error?.message||'Could not read project file'));
  }
 }
-async function importBackground(file){if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type))return notice('Use PNG, JPG, or WebP');if(file.size>12e6)return notice('Choose an image under 12 MB');const reader=new FileReader();reader.onload=()=>{const target=ui.dialog?.kind==='edit-set'?project()?.sets.find(x=>x.id===ui.dialog.id):set();if(!target)return;checkpoint();target.background=reader.result;target.opacity=.8;target.darken=true;images.clear();if(ui.dialog?.kind!=='edit-set'){ui.selection={type:'background'};ui.showInspector=true}save();render();notice('Floor plan imported')};reader.readAsDataURL(file)}
+async function importBackground(file){if(!file)return;if(!['image/png','image/jpeg','image/webp'].includes(file.type))return notice('Use PNG, JPG, or WebP');if(file.size>12e6)return notice('Choose an image under 12 MB');const reader=new FileReader();reader.onload=()=>{const target=ui.dialog?.kind==='edit-set'?project()?.sets.find(x=>x.id===ui.dialog.id):set();if(!target)return;checkpoint();target.background=reader.result;target.backgroundScale=1;const scaleInput=app.querySelector?.('#entityEditScale');if(scaleInput)scaleInput.value='100';target.opacity=.8;target.darken=true;images.clear();if(ui.dialog?.kind!=='edit-set'){ui.selection={type:'background'};ui.showInspector=true}save();render();notice('Floor plan imported')};reader.readAsDataURL(file)}
 async function action(e){const target=e.target.closest('[data-action]');if(!target)return;e.preventDefault();e.stopPropagation();const a=target.dataset.action,id=target.dataset.id;if(a==='open-manual'){stopPlayback();ui.manualReturn=ui.page;ui.page='manual';ui.manualTab='start';ui.manualScroll={};ui.showMenu=false;ui.showLayers=false;ui.showExportPanel=false;render();return}if(a==='close-manual'){ui.page=ui.manualReturn||'workspace';render();return}if(a==='manual-tab'){const el=app.querySelector('.manual-content');if(el)ui.manualScroll[ui.manualTab]=el.scrollTop;ui.manualTab=target.dataset.tab||'start';render();return}if(a==='toggle-playback'){togglePlayback();return}if(playback.playing){playback.elapsedMs=elapsedPlayback();stopPlayback();}
  if(a==='library-view'){ui.libraryView=target.dataset.view==='list'?'list':'grid';render()}
  else if(a==='edit-current-project'){openEditDialog('edit-project',project()?.id)}
@@ -819,6 +824,12 @@ async function action(e){const target=e.target.closest('[data-action]');if(!targ
    }else projectInput.click();
   }else if(a==='select-bg'){ui.selection={type:'background'};ui.showInspector=true;ui.showMenu=false;render()}
  else if(a==='clear-bg'){checkpoint();set().background=null;images.clear();save();render()}else if(a==='export-image')await savePNG();else if(a==='export-zip')await saveZIP();else if(a==='export-video-dialog'){ui.showExportPanel=false;ui.videoDraft={...playbackOptions()};ui.dialog={kind:'video'};render()}else if(a==='confirm-video-export'){const c=ui.videoDraft||playbackOptions();project().playback=P.settings({...playbackOptions(),speed:Number(c.speed),holdMs:Number(c.holdMs),mode:c.mode});ui.videoDraft=null;ui.dialog=null;save();render();await saveVideo()}else if(a==='export-video')await saveVideo();else if(a==='save-project'){clearTimeout(saveTimer);await writeDB();await queuePreviews(project());notice('Project saved locally')}else if(a==='backup')backup()}
+// Dismiss on pointer-down for mouse, pen and touch, keeping the outside target intact.
+app.addEventListener('pointerdown',e=>{
+ if(!ui.showMenu||e.target.closest('.drawer,[data-action="toggle-menu"]'))return;
+ ui.showMenu=false;
+ for(const drawer of app.querySelectorAll?.('.drawer.open')||[])drawer.classList.remove('open');
+},true);
 app.addEventListener('click',action);
 app.addEventListener('scroll',e=>{if(ui.page==='manual'&&e.target?.classList?.contains('manual-content'))ui.manualScroll[ui.manualTab]=e.target.scrollTop},true);
 let panelPointer=null;
